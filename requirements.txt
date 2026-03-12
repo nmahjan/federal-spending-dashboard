@@ -1,0 +1,10 @@
+# Backend dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+requests>=2.31.0
+
+# Data processing
+pandas>=2.0.0
+
+# Development tools
+pytest>=7.4.0
