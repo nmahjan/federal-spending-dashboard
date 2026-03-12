@@ -1,12 +1,126 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line
 } from 'recharts'
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 
-const API_BASE = 'http://localhost:5002/api'
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
+
+// Embedded sample data for GitHub Pages (no backend required)
+const SAMPLE_AGENCIES = [
+  { code: '075', name: 'Department of Health and Human Services', base_oblig: 1800e9, base_outlay: 1750e9, base_budget: 1900e9 },
+  { code: '028', name: 'Social Security Administration', base_oblig: 1400e9, base_outlay: 1350e9, base_budget: 1450e9 },
+  { code: '097', name: 'Department of Defense', base_oblig: 850e9, base_outlay: 820e9, base_budget: 900e9 },
+  { code: '020', name: 'Department of the Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9 },
+  { code: '036', name: 'Department of Veterans Affairs', base_oblig: 320e9, base_outlay: 310e9, base_budget: 340e9 },
+  { code: '012', name: 'Department of Agriculture', base_oblig: 220e9, base_outlay: 210e9, base_budget: 240e9 },
+  { code: '091', name: 'Department of Education', base_oblig: 180e9, base_outlay: 175e9, base_budget: 200e9 },
+  { code: '069', name: 'Department of Transportation', base_oblig: 120e9, base_outlay: 115e9, base_budget: 130e9 },
+  { code: '024', name: 'Department of Homeland Security', base_oblig: 85e9, base_outlay: 82e9, base_budget: 90e9 },
+  { code: '015', name: 'Department of Justice', base_oblig: 42e9, base_outlay: 40e9, base_budget: 45e9 },
+]
+
+const SAMPLE_STATES = [
+  { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
+  { code: 'TX', name: 'Texas', base_spending: 398e9, population: 29145505 },
+  { code: 'NY', name: 'New York', base_spending: 342e9, population: 19453561 },
+  { code: 'FL', name: 'Florida', base_spending: 298e9, population: 21538187 },
+  { code: 'PA', name: 'Pennsylvania', base_spending: 201e9, population: 12801989 },
+  { code: 'OH', name: 'Ohio', base_spending: 175e9, population: 11799448 },
+  { code: 'IL', name: 'Illinois', base_spending: 168e9, population: 12671821 },
+  { code: 'NC', name: 'North Carolina', base_spending: 142e9, population: 10439388 },
+  { code: 'MI', name: 'Michigan', base_spending: 138e9, population: 10077331 },
+  { code: 'GA', name: 'Georgia', base_spending: 132e9, population: 10711908 },
+  { code: 'NJ', name: 'New Jersey', base_spending: 125e9, population: 9288994 },
+  { code: 'VA', name: 'Virginia', base_spending: 118e9, population: 8631393 },
+  { code: 'WA', name: 'Washington', base_spending: 105e9, population: 7614893 },
+  { code: 'AZ', name: 'Arizona', base_spending: 98e9, population: 7278717 },
+  { code: 'MA', name: 'Massachusetts', base_spending: 95e9, population: 7029917 },
+  { code: 'TN', name: 'Tennessee', base_spending: 89e9, population: 6910840 },
+  { code: 'IN', name: 'Indiana', base_spending: 85e9, population: 6785528 },
+  { code: 'MO', name: 'Missouri', base_spending: 82e9, population: 6154913 },
+  { code: 'MD', name: 'Maryland', base_spending: 80e9, population: 6177224 },
+  { code: 'WI', name: 'Wisconsin', base_spending: 76e9, population: 5893718 },
+  { code: 'CO', name: 'Colorado', base_spending: 74e9, population: 5773714 },
+  { code: 'MN', name: 'Minnesota', base_spending: 72e9, population: 5706494 },
+  { code: 'SC', name: 'South Carolina', base_spending: 68e9, population: 5118425 },
+  { code: 'AL', name: 'Alabama', base_spending: 65e9, population: 5024279 },
+  { code: 'LA', name: 'Louisiana', base_spending: 63e9, population: 4657757 },
+  { code: 'KY', name: 'Kentucky', base_spending: 60e9, population: 4505836 },
+  { code: 'OR', name: 'Oregon', base_spending: 56e9, population: 4237256 },
+  { code: 'OK', name: 'Oklahoma', base_spending: 52e9, population: 3959353 },
+  { code: 'CT', name: 'Connecticut', base_spending: 50e9, population: 3605944 },
+  { code: 'UT', name: 'Utah', base_spending: 42e9, population: 3271616 },
+  { code: 'IA', name: 'Iowa', base_spending: 41e9, population: 3190369 },
+  { code: 'NV', name: 'Nevada', base_spending: 40e9, population: 3104614 },
+  { code: 'AR', name: 'Arkansas', base_spending: 38e9, population: 3011524 },
+  { code: 'MS', name: 'Mississippi', base_spending: 37e9, population: 2961279 },
+  { code: 'KS', name: 'Kansas', base_spending: 36e9, population: 2937880 },
+  { code: 'NM', name: 'New Mexico', base_spending: 34e9, population: 2117522 },
+  { code: 'NE', name: 'Nebraska', base_spending: 28e9, population: 1961504 },
+  { code: 'ID', name: 'Idaho', base_spending: 24e9, population: 1839106 },
+  { code: 'WV', name: 'West Virginia', base_spending: 26e9, population: 1793716 },
+  { code: 'HI', name: 'Hawaii', base_spending: 22e9, population: 1455271 },
+  { code: 'NH', name: 'New Hampshire', base_spending: 18e9, population: 1377529 },
+  { code: 'ME', name: 'Maine', base_spending: 19e9, population: 1362359 },
+  { code: 'RI', name: 'Rhode Island', base_spending: 16e9, population: 1097379 },
+  { code: 'MT', name: 'Montana', base_spending: 15e9, population: 1084225 },
+  { code: 'DE', name: 'Delaware', base_spending: 14e9, population: 989948 },
+  { code: 'SD', name: 'South Dakota', base_spending: 13e9, population: 886667 },
+  { code: 'ND', name: 'North Dakota', base_spending: 12e9, population: 779094 },
+  { code: 'AK', name: 'Alaska', base_spending: 15e9, population: 733391 },
+  { code: 'DC', name: 'District of Columbia', base_spending: 45e9, population: 689545 },
+  { code: 'VT', name: 'Vermont', base_spending: 10e9, population: 643077 },
+  { code: 'WY', name: 'Wyoming', base_spending: 9e9, population: 576851 },
+]
+
+function generateDataForYear(year) {
+  const growth = 1 + (year - 2020) * 0.03
+  const covidSpike = (year === 2020 || year === 2021) ? 1.2 : 1.0
+  
+  const agencies = SAMPLE_AGENCIES.map(a => {
+    const outlays = a.base_outlay * growth * covidSpike
+    return {
+      code: a.code,
+      name: a.name,
+      outlays,
+      outlays_formatted: formatCurrencyStatic(outlays),
+      percent_of_total: 0,
+      yoy_change: 0.03
+    }
+  })
+  
+  const totalAgency = agencies.reduce((sum, a) => sum + a.outlays, 0)
+  agencies.forEach(a => { a.percent_of_total = (a.outlays / totalAgency) * 100 })
+  
+  const states = SAMPLE_STATES.map(s => {
+    const outlays = s.base_spending * growth * (year === 2020 || year === 2021 ? 1.15 : 1.0)
+    const perCapita = outlays / s.population
+    return {
+      code: s.code,
+      name: s.name,
+      outlays,
+      outlays_formatted: formatCurrencyStatic(outlays),
+      population: s.population,
+      per_capita: perCapita,
+      per_capita_formatted: `$${Math.round(perCapita).toLocaleString()}`,
+      percent_of_total: 0
+    }
+  })
+  
+  const totalState = states.reduce((sum, s) => sum + s.outlays, 0)
+  states.forEach(s => { s.percent_of_total = (s.outlays / totalState) * 100 })
+  
+  return { agencies, states, totalAgency }
+}
+
+function formatCurrencyStatic(value) {
+  if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`
+  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`
+  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`
+  return `$${value.toLocaleString()}`
+}
 
 // State abbreviation to FIPS code mapping
 const STATE_FIPS = {
@@ -195,67 +309,41 @@ function StateTable({ states }) {
 }
 
 function App() {
-  const [overview, setOverview] = useState(null)
-  const [trend, setTrend] = useState(null)
-  const [agencies, setAgencies] = useState(null)
-  const [states, setStates] = useState(null)
   const [selectedYear, setSelectedYear] = useState(2025)
   const [activeTab, setActiveTab] = useState('overview')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true)
-      setError(null)
-      try {
-        const [overviewRes, trendRes, agenciesRes, statesRes] = await Promise.all([
-          fetch(`${API_BASE}/overview?year=${selectedYear}`),
-          fetch(`${API_BASE}/overview/trend?years=6`),
-          fetch(`${API_BASE}/agencies?year=${selectedYear}`),
-          fetch(`${API_BASE}/states?year=${selectedYear}`)
-        ])
-        
-        if (!overviewRes.ok) throw new Error('Failed to fetch overview')
-        
-        setOverview(await overviewRes.json())
-        setTrend(await trendRes.json())
-        setAgencies(await agenciesRes.json())
-        setStates(await statesRes.json())
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [selectedYear])
+  // Generate data for selected year using embedded static data
+  const data = useMemo(() => generateDataForYear(selectedYear), [selectedYear])
+  
+  // Generate trend data for all years
+  const trend = useMemo(() => ({
+    years: [2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+      const yearData = generateDataForYear(year)
+      return { fiscal_year: year, total_outlays: yearData.totalAgency }
+    })
+  }), [])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading federal spending data...</p>
-        </div>
-      </div>
-    )
+  const overview = {
+    fiscal_year: selectedYear,
+    total_outlays: data.totalAgency,
+    total_outlays_formatted: formatCurrencyStatic(data.totalAgency),
+    agency_count: data.agencies.length,
+    top_agencies: data.agencies.slice(0, 5),
+    year_over_year_change: 0.03
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <h2 className="text-red-800 font-semibold">Error Loading Data</h2>
-          <p className="text-red-600 mt-2">{error}</p>
-          <p className="text-sm text-gray-500 mt-4">Make sure the API server is running on port 5002</p>
-        </div>
-      </div>
-    )
-  }
+  const agencies = { agencies: data.agencies, fiscal_year: selectedYear }
+  const states = { states: data.states, fiscal_year: selectedYear }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Project Header */}
+      <div className="bg-blue-900 text-white py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h1 className="text-xl font-bold text-center">Neil Mahajan BMAD Project</h1>
+        </div>
+      </div>
+      
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
