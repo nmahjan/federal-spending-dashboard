@@ -179,6 +179,50 @@ const CATEGORY_YEAR_ADJUSTMENTS = {
   2025: { defense: 1.05, net_interest: 1.15 },     // Projected
 }
 
+// National Debt Data - Tracks total debt, GDP, and debt-to-GDP ratio
+// FY2019 baseline: $22.7T total debt, $21.4T GDP = 106% debt-to-GDP
+const DEBT_DATA = {
+  2019: { totalDebt: 22.7e12, publicDebt: 16.8e12, gdp: 21.4e12 },
+  2020: { totalDebt: 27.7e12, publicDebt: 21.0e12, gdp: 21.0e12 },  // COVID spike
+  2021: { totalDebt: 29.6e12, publicDebt: 22.3e12, gdp: 23.0e12 },  // Recovery
+  2022: { totalDebt: 31.4e12, publicDebt: 24.3e12, gdp: 25.5e12 },  // Continued growth
+  2023: { totalDebt: 33.2e12, publicDebt: 26.2e12, gdp: 27.4e12 },  // Debt ceiling drama
+  2024: { totalDebt: 35.0e12, publicDebt: 27.8e12, gdp: 28.8e12 },  // Continued rise
+  2025: { totalDebt: 36.8e12, publicDebt: 29.3e12, gdp: 30.0e12 },  // Projected
+}
+
+// Generate debt metrics for a given year
+function generateDebtDataForYear(year, revenueTotal, interestPayment) {
+  const d = DEBT_DATA[year] || DEBT_DATA[2025]
+  const prevD = DEBT_DATA[year - 1] || DEBT_DATA[2019]
+  
+  const debtToGdp = (d.totalDebt / d.gdp) * 100
+  const publicDebtToGdp = (d.publicDebt / d.gdp) * 100
+  const interestToRevenue = revenueTotal > 0 ? (interestPayment / revenueTotal) * 100 : 0
+  
+  const debtYoyChange = year > 2019 ? (d.totalDebt - prevD.totalDebt) / prevD.totalDebt : 0
+  const debtPerCapita = d.totalDebt / 335e6  // ~335 million population
+  
+  return {
+    totalDebt: d.totalDebt,
+    totalDebt_formatted: formatCurrencyStatic(d.totalDebt),
+    publicDebt: d.publicDebt,
+    publicDebt_formatted: formatCurrencyStatic(d.publicDebt),
+    intragovDebt: d.totalDebt - d.publicDebt,
+    intragovDebt_formatted: formatCurrencyStatic(d.totalDebt - d.publicDebt),
+    gdp: d.gdp,
+    gdp_formatted: formatCurrencyStatic(d.gdp),
+    debtToGdp,
+    publicDebtToGdp,
+    interestToRevenue,
+    interestPayment,
+    interestPayment_formatted: formatCurrencyStatic(interestPayment),
+    debtYoyChange,
+    debtPerCapita,
+    debtPerCapita_formatted: `$${Math.round(debtPerCapita).toLocaleString()}`,
+  }
+}
+
 const SAMPLE_STATES = [
   { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
   { code: 'TX', name: 'Texas', base_spending: 398e9, population: 29145505 },
@@ -600,6 +644,74 @@ function CategoryTrendChart({ data }) {
   )
 }
 
+function DebtTrendChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="fiscal_year" />
+        <YAxis tickFormatter={formatCurrency} />
+        <Tooltip 
+          formatter={(v, name) => [formatCurrency(v), name]} 
+          labelFormatter={(l) => `FY ${l}`} 
+        />
+        <Legend />
+        <Line 
+          type="monotone" 
+          dataKey="totalDebt" 
+          name="Total Debt"
+          stroke="#DC2626" 
+          strokeWidth={3}
+          dot={{ fill: '#DC2626', strokeWidth: 2 }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey="gdp" 
+          name="GDP"
+          stroke="#10B981" 
+          strokeWidth={3}
+          strokeDasharray="5 5"
+          dot={{ fill: '#10B981', strokeWidth: 2 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+function DebtToGdpChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="fiscal_year" />
+        <YAxis domain={[80, 140]} tickFormatter={(v) => `${v}%`} />
+        <Tooltip 
+          formatter={(v) => [`${v.toFixed(1)}%`, 'Debt-to-GDP']} 
+          labelFormatter={(l) => `FY ${l}`} 
+        />
+        <Line 
+          type="monotone" 
+          dataKey="debtToGdp" 
+          name="Debt-to-GDP"
+          stroke="#DC2626" 
+          strokeWidth={3}
+          dot={{ fill: '#DC2626', strokeWidth: 2 }}
+        />
+        {/* 100% threshold line */}
+        <Line 
+          type="monotone" 
+          dataKey="threshold" 
+          name="100% Threshold"
+          stroke="#6B7280" 
+          strokeWidth={1}
+          strokeDasharray="10 5"
+          dot={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
 function USMap({ states, onStateHover }) {
   const [hoveredState, setHoveredState] = useState(null)
   
@@ -752,6 +864,29 @@ function App() {
     })
   }), [])
 
+  // Generate debt data for selected year
+  const interestPayment = budgetData.totals.interest
+  const debtData = useMemo(() => 
+    generateDebtDataForYear(selectedYear, revenueData.totalRevenue, interestPayment), 
+    [selectedYear, revenueData.totalRevenue, interestPayment]
+  )
+  
+  // Generate debt trend data
+  const debtTrend = useMemo(() => ({
+    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+      const yearRevenue = generateRevenueForYear(year)
+      const yearBudget = generateBudgetCategoriesForYear(year)
+      const yearDebt = generateDebtDataForYear(year, yearRevenue.totalRevenue, yearBudget.totals.interest)
+      return { 
+        fiscal_year: year, 
+        totalDebt: yearDebt.totalDebt,
+        gdp: yearDebt.gdp,
+        debtToGdp: yearDebt.debtToGdp,
+        threshold: 100  // 100% debt-to-GDP reference line
+      }
+    })
+  }), [])
+
   // Calculate actual overview YoY change
   const prevYearData = selectedYear > 2019 ? generateDataForYear(selectedYear - 1) : null
   const overviewYoyChange = prevYearData 
@@ -789,13 +924,18 @@ function App() {
     totalSpending: budgetData.totalSpending, 
     fiscal_year: selectedYear 
   }
+  
+  const debt = {
+    ...debtData,
+    fiscal_year: selectedYear
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Project Header */}
       <div className="bg-blue-900 text-white py-3">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-xl font-bold text-center">Neil Mahajan BMAD Project</h1>
+          <h1 className="text-xl font-bold text-center">Neil Mahajan Federal Spending Analysis</h1>
         </div>
       </div>
       
@@ -829,6 +969,7 @@ function App() {
               { id: 'overview', label: 'Overview' },
               { id: 'revenue', label: 'Revenue' },
               { id: 'budget', label: 'Budget' },
+              { id: 'debt', label: 'Debt' },
               { id: 'agencies', label: 'Agencies' },
               { id: 'states', label: 'States' }
             ].map(tab => (
@@ -1047,6 +1188,120 @@ function App() {
                 <li><strong>Mandatory (65%):</strong> Spending required by law - Social Security, Medicare, Medicaid. Grows automatically.</li>
                 <li><strong>Discretionary (30%):</strong> Requires annual congressional appropriation - defense, education, transportation.</li>
                 <li><strong>Net Interest (5%):</strong> Interest payments on the national debt. Growing rapidly as debt increases.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'debt' && debt && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Total National Debt</p>
+                <p className="text-3xl font-bold text-red-600 mt-2">{debt.totalDebt_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">FY {debt.fiscal_year}</p>
+                {debt.debtYoyChange !== 0 && (
+                  <p className="text-sm text-red-600 mt-2">
+                    ↑ {(debt.debtYoyChange * 100).toFixed(1)}% vs last year
+                  </p>
+                )}
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Debt-to-GDP Ratio</p>
+                <p className={`text-3xl font-bold mt-2 ${debt.debtToGdp > 100 ? 'text-red-600' : 'text-amber-600'}`}>
+                  {debt.debtToGdp.toFixed(1)}%
+                </p>
+                <p className="text-sm text-gray-500 mt-1">GDP: {debt.gdp_formatted}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Interest Payments</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{debt.interestPayment_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">{debt.interestToRevenue.toFixed(1)}% of revenue</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Debt Per Citizen</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{debt.debtPerCapita_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">Per capita share</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Debt vs GDP Trend</h3>
+                <div className="flex gap-4 mb-2 text-sm">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-600 rounded"></span> Total Debt</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded"></span> GDP</span>
+                </div>
+                {debtTrend && <DebtTrendChart data={debtTrend.years} />}
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Debt-to-GDP Ratio Trend</h3>
+                <p className="text-sm text-gray-500 mb-2">Above 100% = Debt exceeds annual economic output</p>
+                {debtTrend && <DebtToGdpChart data={debtTrend.years} />}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Debt Breakdown - FY {debt.fiscal_year}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-3">By Holder</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">Debt Held by Public</p>
+                        <p className="text-sm text-gray-500">Foreign governments, investors, Fed</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">{debt.publicDebt_formatted}</p>
+                        <p className="text-sm text-gray-500">{((debt.publicDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">Intragovernmental Holdings</p>
+                        <p className="text-sm text-gray-500">Social Security trust fund, etc.</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">{debt.intragovDebt_formatted}</p>
+                        <p className="text-sm text-gray-500">{((debt.intragovDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-3">Key Ratios</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-gray-700">Public Debt-to-GDP</p>
+                      <p className={`font-bold ${debt.publicDebtToGdp > 80 ? 'text-amber-600' : 'text-gray-900'}`}>
+                        {debt.publicDebtToGdp.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-gray-700">Interest as % of Revenue</p>
+                      <p className={`font-bold ${debt.interestToRevenue > 15 ? 'text-red-600' : 'text-gray-900'}`}>
+                        {debt.interestToRevenue.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-gray-700">Year-over-Year Change</p>
+                      <p className="font-bold text-red-600">
+                        +{(debt.debtYoyChange * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-red-50 rounded-xl border border-red-200 p-6">
+              <h4 className="font-semibold text-red-800 mb-2">Understanding the National Debt</h4>
+              <ul className="text-sm text-red-700 space-y-1">
+                <li><strong>Debt-to-GDP above 100%:</strong> The debt exceeds the entire annual economic output of the country.</li>
+                <li><strong>Interest crowding out:</strong> As interest payments grow, less is available for programs and investments.</li>
+                <li><strong>Public debt matters most:</strong> This is what the government owes to external creditors and must pay interest on.</li>
+                <li><strong>Sustainability concern:</strong> If interest rates rise or GDP slows, debt servicing becomes more difficult.</li>
               </ul>
             </div>
           </div>
