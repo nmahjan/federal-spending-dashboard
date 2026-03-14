@@ -76,18 +76,26 @@ const SAMPLE_STATES = [
 ]
 
 function generateDataForYear(year) {
-  const growth = 1 + (year - 2020) * 0.03
+  // 2019 is baseline (growth = 1.0), 3% annual growth after
+  const growth = 1 + (year - 2019) * 0.03
   const covidSpike = (year === 2020 || year === 2021) ? 1.2 : 1.0
+  
+  // Calculate previous year values for YoY comparison
+  const prevGrowth = 1 + (year - 1 - 2019) * 0.03
+  const prevCovidSpike = (year - 1 === 2020 || year - 1 === 2021) ? 1.2 : 1.0
   
   const agencies = SAMPLE_AGENCIES.map(a => {
     const outlays = a.base_outlay * growth * covidSpike
+    const prevOutlays = a.base_outlay * prevGrowth * prevCovidSpike
+    // Calculate actual YoY change (0 for 2019 since no prior year)
+    const yoy_change = year > 2019 ? (outlays - prevOutlays) / prevOutlays : 0
     return {
       code: a.code,
       name: a.name,
       outlays,
       outlays_formatted: formatCurrencyStatic(outlays),
       percent_of_total: 0,
-      yoy_change: 0.03
+      yoy_change
     }
   })
   
@@ -315,13 +323,19 @@ function App() {
   // Generate data for selected year using embedded static data
   const data = useMemo(() => generateDataForYear(selectedYear), [selectedYear])
   
-  // Generate trend data for all years
+  // Generate trend data for all years (including 2019 pre-COVID baseline)
   const trend = useMemo(() => ({
-    years: [2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
       const yearData = generateDataForYear(year)
       return { fiscal_year: year, total_outlays: yearData.totalAgency }
     })
   }), [])
+
+  // Calculate actual overview YoY change
+  const prevYearData = selectedYear > 2019 ? generateDataForYear(selectedYear - 1) : null
+  const overviewYoyChange = prevYearData 
+    ? (data.totalAgency - prevYearData.totalAgency) / prevYearData.totalAgency 
+    : 0
 
   const overview = {
     fiscal_year: selectedYear,
@@ -329,7 +343,7 @@ function App() {
     total_outlays_formatted: formatCurrencyStatic(data.totalAgency),
     agency_count: data.agencies.length,
     top_agencies: data.agencies.slice(0, 5),
-    year_over_year_change: 0.03
+    year_over_year_change: overviewYoyChange
   }
 
   const agencies = { agencies: data.agencies, fiscal_year: selectedYear }
@@ -358,7 +372,7 @@ function App() {
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
                 className="border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500"
               >
-                {[2025, 2024, 2023, 2022, 2021, 2020].map(y => (
+                {[2025, 2024, 2023, 2022, 2021, 2020, 2019].map(y => (
                   <option key={y} value={y}>FY {y}</option>
                 ))}
               </select>
