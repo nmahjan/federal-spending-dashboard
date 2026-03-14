@@ -249,6 +249,119 @@ const CONTRACTOR_DATA = {
   2025: { spending: 770e9, estimated_fte: 4900000 },
 }
 
+// Top Federal Contractors (FY2019 baseline)
+// Defense contractors dominate federal procurement
+const TOP_CONTRACTORS = [
+  { name: 'Lockheed Martin', base: 48e9, sector: 'Defense', growth: 0.04 },
+  { name: 'Boeing', base: 28e9, sector: 'Defense', growth: 0.02 },
+  { name: 'Raytheon', base: 24e9, sector: 'Defense', growth: 0.05 },
+  { name: 'General Dynamics', base: 20e9, sector: 'Defense', growth: 0.035 },
+  { name: 'Northrop Grumman', base: 18e9, sector: 'Defense', growth: 0.045 },
+  { name: 'McKesson', base: 8e9, sector: 'Healthcare', growth: 0.06 },
+  { name: 'Humana', base: 7e9, sector: 'Healthcare', growth: 0.05 },
+  { name: 'Leidos', base: 6e9, sector: 'IT Services', growth: 0.08 },
+  { name: 'Booz Allen Hamilton', base: 5.5e9, sector: 'Consulting', growth: 0.06 },
+  { name: 'SAIC', base: 4.5e9, sector: 'IT Services', growth: 0.05 },
+]
+
+// Contract Categories (FY2019 baseline)
+const CONTRACT_CATEGORIES = [
+  { name: 'Defense & Military', base: 380e9, growth: 0.03, covid_boost: 1.02 },
+  { name: 'IT & Technology', base: 95e9, growth: 0.06, covid_boost: 1.15 },
+  { name: 'Professional Services', base: 75e9, growth: 0.04, covid_boost: 1.08 },
+  { name: 'Healthcare Services', base: 45e9, growth: 0.05, covid_boost: 1.25 },
+  { name: 'Construction', base: 30e9, growth: 0.025, covid_boost: 0.90 },
+  { name: 'Research & Development', base: 28e9, growth: 0.05, covid_boost: 1.20 },
+  { name: 'Other Services', base: 47e9, growth: 0.03, covid_boost: 1.05 },
+]
+
+// Federal Grants Data (FY2019 baseline)
+const GRANT_CATEGORIES = [
+  { name: 'Healthcare & Medicaid', base: 450e9, growth: 0.05, covid_boost: 1.30 },
+  { name: 'Income Security', base: 180e9, growth: 0.025, covid_boost: 1.60 },
+  { name: 'Education', base: 75e9, growth: 0.02, covid_boost: 1.35 },
+  { name: 'Transportation', base: 70e9, growth: 0.03, covid_boost: 0.95 },
+  { name: 'Research Grants', base: 45e9, growth: 0.04, covid_boost: 1.10 },
+  { name: 'Housing & Community', base: 35e9, growth: 0.025, covid_boost: 1.20 },
+  { name: 'Other Grants', base: 55e9, growth: 0.03, covid_boost: 1.15 },
+]
+
+// Competition rates for contracts
+const COMPETITION_DATA = {
+  2019: { competed: 62, sole_source: 28, other: 10 },
+  2020: { competed: 58, sole_source: 32, other: 10 },  // COVID urgency
+  2021: { competed: 55, sole_source: 35, other: 10 },  // Continued urgency
+  2022: { competed: 60, sole_source: 30, other: 10 },
+  2023: { competed: 63, sole_source: 27, other: 10 },
+  2024: { competed: 65, sole_source: 25, other: 10 },
+  2025: { competed: 66, sole_source: 24, other: 10 },
+}
+
+// Generate contracts & grants data for a given year
+function generateContractsDataForYear(year) {
+  const yearsFromBase = year - 2019
+  
+  // Top contractors
+  const contractors = TOP_CONTRACTORS.map(c => {
+    const growth = Math.pow(1 + c.growth, yearsFromBase)
+    const amount = Math.round(c.base * growth / 1e6) * 1e6
+    return {
+      name: c.name,
+      sector: c.sector,
+      amount,
+      amount_formatted: formatCurrencyStatic(amount)
+    }
+  })
+  
+  // Contract categories
+  const categories = CONTRACT_CATEGORIES.map(cat => {
+    const growth = Math.pow(1 + cat.growth, yearsFromBase)
+    const covidFactor = (year === 2020 || year === 2021) ? cat.covid_boost : 1.0
+    const amount = Math.round(cat.base * growth * covidFactor / 1e6) * 1e6
+    return {
+      name: cat.name,
+      amount,
+      amount_formatted: formatCurrencyStatic(amount),
+      percent: 0
+    }
+  })
+  const totalContracts = categories.reduce((sum, c) => sum + c.amount, 0)
+  categories.forEach(c => { c.percent = (c.amount / totalContracts) * 100 })
+  
+  // Grant categories
+  const grants = GRANT_CATEGORIES.map(g => {
+    const growth = Math.pow(1 + g.growth, yearsFromBase)
+    const covidFactor = (year === 2020 || year === 2021) ? g.covid_boost : 1.0
+    const amount = Math.round(g.base * growth * covidFactor / 1e6) * 1e6
+    return {
+      name: g.name,
+      amount,
+      amount_formatted: formatCurrencyStatic(amount),
+      percent: 0
+    }
+  })
+  const totalGrants = grants.reduce((sum, g) => sum + g.amount, 0)
+  grants.forEach(g => { g.percent = (g.amount / totalGrants) * 100 })
+  
+  // Competition data
+  const competition = COMPETITION_DATA[year] || COMPETITION_DATA[2025]
+  
+  return {
+    contractors,
+    topContractorTotal: contractors.reduce((sum, c) => sum + c.amount, 0),
+    topContractorTotal_formatted: formatCurrencyStatic(contractors.reduce((sum, c) => sum + c.amount, 0)),
+    categories,
+    totalContracts,
+    totalContracts_formatted: formatCurrencyStatic(totalContracts),
+    grants,
+    totalGrants,
+    totalGrants_formatted: formatCurrencyStatic(totalGrants),
+    competition,
+    combined: totalContracts + totalGrants,
+    combined_formatted: formatCurrencyStatic(totalContracts + totalGrants)
+  }
+}
+
 // Generate workforce data for a given year
 function generateWorkforceDataForYear(year) {
   const agencies = WORKFORCE_AGENCIES.map(a => {
@@ -846,6 +959,82 @@ function WorkforceTrendChart({ data }) {
   )
 }
 
+function TopContractorsChart({ contractors }) {
+  const data = contractors.slice(0, 8).map(c => ({
+    name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+    amount: c.amount,
+    sector: c.sector
+  }))
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis type="number" tickFormatter={formatCurrency} />
+        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+        <Bar dataKey="amount" fill="#F97316" radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function ContractCategoryChart({ categories }) {
+  const COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#EF4444', '#6B7280']
+  
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={categories}
+          cx="50%"
+          cy="50%"
+          innerRadius={50}
+          outerRadius={90}
+          paddingAngle={2}
+          dataKey="amount"
+          nameKey="name"
+          label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+          labelLine={false}
+        >
+          {categories.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
+function GrantsCategoryChart({ grants }) {
+  const COLORS = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#059669', '#047857', '#6B7280']
+  
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={grants}
+          cx="50%"
+          cy="50%"
+          innerRadius={50}
+          outerRadius={90}
+          paddingAngle={2}
+          dataKey="amount"
+          nameKey="name"
+          label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+          labelLine={false}
+        >
+          {grants.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
 function USMap({ states, onStateHover }) {
   const [hoveredState, setHoveredState] = useState(null)
   
@@ -1037,6 +1226,9 @@ function App() {
     })
   }), [])
 
+  // Generate contracts & grants data for selected year
+  const contractsData = useMemo(() => generateContractsDataForYear(selectedYear), [selectedYear])
+
   // Calculate actual overview YoY change
   const prevYearData = selectedYear > 2019 ? generateDataForYear(selectedYear - 1) : null
   const overviewYoyChange = prevYearData 
@@ -1084,6 +1276,11 @@ function App() {
     ...workforceData,
     fiscal_year: selectedYear
   }
+  
+  const contracts = {
+    ...contractsData,
+    fiscal_year: selectedYear
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1126,6 +1323,7 @@ function App() {
               { id: 'budget', label: 'Budget' },
               { id: 'debt', label: 'Debt' },
               { id: 'workforce', label: 'Workforce' },
+              { id: 'contracts', label: 'Contracts' },
               { id: 'agencies', label: 'Agencies' },
               { id: 'states', label: 'States' }
             ].map(tab => (
@@ -1544,6 +1742,128 @@ function App() {
                 <li><strong>Contractors outnumber feds:</strong> For every federal employee, there are ~2+ contractor workers doing government work.</li>
                 <li><strong>VA is fastest growing:</strong> Driven by increased veteran healthcare needs and benefits processing.</li>
                 <li><strong>Automation impact:</strong> Treasury & SSA declining as processes become automated.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'contracts' && contracts && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Total Contract Spending</p>
+                <p className="text-3xl font-bold text-orange-600 mt-2">{contracts.totalContracts_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">FY {contracts.fiscal_year}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Total Federal Grants</p>
+                <p className="text-3xl font-bold text-green-600 mt-2">{contracts.totalGrants_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">To states & organizations</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Top 10 Contractors</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{contracts.topContractorTotal_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">{((contracts.topContractorTotal / contracts.totalContracts) * 100).toFixed(0)}% of all contracts</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Competed Contracts</p>
+                <p className="text-3xl font-bold text-blue-600 mt-2">{contracts.competition.competed}%</p>
+                <p className="text-sm text-gray-500 mt-1">Sole source: {contracts.competition.sole_source}%</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Federal Contractors - FY {contracts.fiscal_year}</h3>
+                <TopContractorsChart contractors={contracts.contractors} />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Contract Spending by Category</h3>
+                <ContractCategoryChart categories={contracts.categories} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Federal Grants by Category</h3>
+                <GrantsCategoryChart grants={contracts.grants} />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Contract Competition Rate</h3>
+                <div className="space-y-4 mt-6">
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Competed (Full & Open)</span>
+                      <span className="font-medium">{contracts.competition.competed}%</span>
+                    </div>
+                    <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${contracts.competition.competed}%` }}></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Sole Source / No Competition</span>
+                      <span className="font-medium">{contracts.competition.sole_source}%</span>
+                    </div>
+                    <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500 rounded-full" style={{ width: `${contracts.competition.sole_source}%` }}></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Other (Limited, Set-aside)</span>
+                      <span className="font-medium">{contracts.competition.other}%</span>
+                    </div>
+                    <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${contracts.competition.other}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Federal Contractors - FY {contracts.fiscal_year}</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contractor</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sector</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contract Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {contracts.contractors.map((contractor, idx) => (
+                      <tr key={contractor.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4 text-gray-500">#{idx + 1}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900">{contractor.name}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            contractor.sector === 'Defense' ? 'bg-blue-100 text-blue-800' :
+                            contractor.sector === 'Healthcare' ? 'bg-green-100 text-green-800' :
+                            contractor.sector === 'IT Services' ? 'bg-purple-100 text-purple-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {contractor.sector}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-900">{contractor.amount_formatted}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-orange-50 rounded-xl border border-orange-200 p-6">
+              <h4 className="font-semibold text-orange-800 mb-2">Understanding Federal Procurement</h4>
+              <ul className="text-sm text-orange-700 space-y-1">
+                <li><strong>Defense dominates:</strong> The top 5 contractors are all defense companies, receiving ~25% of all contract dollars.</li>
+                <li><strong>Competition matters:</strong> Competed contracts typically cost 15-20% less than sole-source awards.</li>
+                <li><strong>Grants vs Contracts:</strong> Grants go to states/nonprofits for specific purposes; contracts buy goods/services.</li>
+                <li><strong>COVID impact:</strong> Emergency procurements in 2020-21 increased sole-source awards significantly.</li>
               </ul>
             </div>
           </div>
