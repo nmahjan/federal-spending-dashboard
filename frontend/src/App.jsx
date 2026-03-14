@@ -32,6 +32,77 @@ const YEAR_ADJUSTMENTS = {
   2025: { '097': 1.08, '024': 1.1 },  // Defense & security increases
 }
 
+// Federal Revenue Sources (FY2019 baseline = $3.46T total)
+// Each source has unique growth patterns reflecting economic & policy factors
+const SAMPLE_REVENUE = [
+  { 
+    code: 'individual', 
+    name: 'Individual Income Tax', 
+    base: 1718e9,        // ~50% of revenue - largest source
+    annual_growth: 0.04, // Grows with wages/economy
+    covid_impact: 0.90,  // Dropped ~10% in 2020 (unemployment, deferrals)
+    recovery_boost: 1.25 // Strong 2021-2022 recovery (stock gains, employment)
+  },
+  { 
+    code: 'payroll', 
+    name: 'Payroll Taxes (FICA)', 
+    base: 1243e9,        // Social Security + Medicare
+    annual_growth: 0.025,// Tied to employment, steady
+    covid_impact: 0.97,  // Slight dip from unemployment
+    recovery_boost: 1.05 // Quick employment recovery
+  },
+  { 
+    code: 'corporate', 
+    name: 'Corporate Income Tax', 
+    base: 230e9,         // Volatile, affected by 2017 tax cuts
+    annual_growth: 0.03, // Modest baseline
+    covid_impact: 0.85,  // Dropped ~15% (business closures)
+    recovery_boost: 1.40 // Surged 40%+ in 2021-2022 (record profits)
+  },
+  { 
+    code: 'excise', 
+    name: 'Excise Taxes', 
+    base: 99e9,          // Gas, tobacco, alcohol, etc.
+    annual_growth: 0.01, // Slow growth (declining fuel use)
+    covid_impact: 0.85,  // Travel/consumption down
+    recovery_boost: 1.10 // Partial recovery
+  },
+  { 
+    code: 'customs', 
+    name: 'Customs Duties', 
+    base: 71e9,          // Import tariffs
+    annual_growth: 0.02, // Trade-dependent
+    covid_impact: 0.88,  // Trade disruption
+    recovery_boost: 1.08 // Trade recovery
+  },
+  { 
+    code: 'estate', 
+    name: 'Estate & Gift Taxes', 
+    base: 17e9,          // Small but notable
+    annual_growth: 0.035,// Grows with wealth
+    covid_impact: 0.95,  // Slight dip
+    recovery_boost: 1.20 // Wealth gains drove increase
+  },
+  { 
+    code: 'other', 
+    name: 'Other Revenue', 
+    base: 85e9,          // Fed Reserve earnings, fees, misc
+    annual_growth: 0.02, // Variable
+    covid_impact: 1.10,  // Fed earnings actually increased
+    recovery_boost: 1.0  // Normalized
+  },
+]
+
+// Year-specific revenue adjustments (tax policy changes, economic events)
+const REVENUE_YEAR_ADJUSTMENTS = {
+  2020: { corporate: 0.85 },              // Extra corporate hit
+  2021: { individual: 1.15, corporate: 1.30 }, // Strong recovery, stimulus effects
+  2022: { individual: 1.10, corporate: 1.25 }, // Peak recovery
+  2023: { corporate: 0.95 },              // Normalization
+  2024: { individual: 1.02 },             // Steady
+  2025: { individual: 1.03, corporate: 1.05 }, // Projected growth
+}
+
 const SAMPLE_STATES = [
   { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
   { code: 'TX', name: 'Texas', base_spending: 398e9, population: 29145505 },
@@ -85,6 +156,50 @@ const SAMPLE_STATES = [
   { code: 'VT', name: 'Vermont', base_spending: 10e9, population: 643077 },
   { code: 'WY', name: 'Wyoming', base_spending: 9e9, population: 576851 },
 ]
+
+// Generate revenue data for a given fiscal year
+function generateRevenueForYear(year) {
+  const revenues = SAMPLE_REVENUE.map(r => {
+    const yearsFromBase = year - 2019
+    const growth = Math.pow(1 + r.annual_growth, yearsFromBase)
+    
+    // COVID impact in 2020, recovery boost in 2021-2022
+    let economicFactor = 1.0
+    if (year === 2020) economicFactor = r.covid_impact
+    else if (year === 2021 || year === 2022) economicFactor = r.recovery_boost
+    
+    // Year-specific policy adjustments
+    const yearAdj = REVENUE_YEAR_ADJUSTMENTS[year]?.[r.code] || 1.0
+    
+    // Round to nearest million
+    const amount = Math.round(r.base * growth * economicFactor * yearAdj / 1e6) * 1e6
+    
+    // Calculate previous year for YoY
+    const prevYearsFromBase = year - 1 - 2019
+    const prevGrowth = prevYearsFromBase >= 0 ? Math.pow(1 + r.annual_growth, prevYearsFromBase) : 1
+    let prevEconomicFactor = 1.0
+    if (year - 1 === 2020) prevEconomicFactor = r.covid_impact
+    else if (year - 1 === 2021 || year - 1 === 2022) prevEconomicFactor = r.recovery_boost
+    const prevYearAdj = REVENUE_YEAR_ADJUSTMENTS[year - 1]?.[r.code] || 1.0
+    const prevAmount = Math.round(r.base * prevGrowth * prevEconomicFactor * prevYearAdj / 1e6) * 1e6
+    
+    const yoy_change = year > 2019 ? (amount - prevAmount) / prevAmount : 0
+    
+    return {
+      code: r.code,
+      name: r.name,
+      amount,
+      amount_formatted: formatCurrencyStatic(amount),
+      percent_of_total: 0,
+      yoy_change
+    }
+  })
+  
+  const totalRevenue = revenues.reduce((sum, r) => sum + r.amount, 0)
+  revenues.forEach(r => { r.percent_of_total = (r.amount / totalRevenue) * 100 })
+  
+  return { revenues, totalRevenue }
+}
 
 function generateDataForYear(year) {
   const agencies = SAMPLE_AGENCIES.map(a => {
@@ -214,6 +329,26 @@ function AgencyChart({ agencies }) {
   )
 }
 
+function RevenueChart({ revenues }) {
+  const data = revenues.map(r => ({
+    name: r.name.replace(' Taxes', '').replace('Individual ', ''),
+    value: r.amount,
+    percent: r.percent_of_total
+  }))
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis type="number" tickFormatter={formatCurrency} />
+        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+        <Bar dataKey="value" fill="#10B981" radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 function TrendChart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
@@ -227,6 +362,39 @@ function TrendChart({ data }) {
           dataKey="total_outlays" 
           stroke="#3B82F6" 
           strokeWidth={3}
+          dot={{ fill: '#3B82F6', strokeWidth: 2 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+function RevenueTrendChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="fiscal_year" />
+        <YAxis tickFormatter={formatCurrency} />
+        <Tooltip 
+          formatter={(v, name) => [formatCurrency(v), name === 'total_revenue' ? 'Revenue' : 'Spending']} 
+          labelFormatter={(l) => `FY ${l}`} 
+        />
+        <Line 
+          type="monotone" 
+          dataKey="total_revenue" 
+          name="Revenue"
+          stroke="#10B981" 
+          strokeWidth={3}
+          dot={{ fill: '#10B981', strokeWidth: 2 }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey="total_outlays" 
+          name="Spending"
+          stroke="#3B82F6" 
+          strokeWidth={3}
+          strokeDasharray="5 5"
           dot={{ fill: '#3B82F6', strokeWidth: 2 }}
         />
       </LineChart>
@@ -346,14 +514,26 @@ function App() {
   const [selectedYear, setSelectedYear] = useState(2025)
   const [activeTab, setActiveTab] = useState('overview')
 
-  // Generate data for selected year using embedded static data
+  // Generate spending data for selected year
   const data = useMemo(() => generateDataForYear(selectedYear), [selectedYear])
   
-  // Generate trend data for all years (including 2019 pre-COVID baseline)
+  // Generate revenue data for selected year
+  const revenueData = useMemo(() => generateRevenueForYear(selectedYear), [selectedYear])
+  
+  // Calculate deficit (spending - revenue)
+  const deficit = data.totalAgency - revenueData.totalRevenue
+  
+  // Generate trend data for all years (including revenue for comparison)
   const trend = useMemo(() => ({
     years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
       const yearData = generateDataForYear(year)
-      return { fiscal_year: year, total_outlays: yearData.totalAgency }
+      const yearRevenue = generateRevenueForYear(year)
+      return { 
+        fiscal_year: year, 
+        total_outlays: yearData.totalAgency,
+        total_revenue: yearRevenue.totalRevenue,
+        deficit: yearData.totalAgency - yearRevenue.totalRevenue
+      }
     })
   }), [])
 
@@ -363,17 +543,30 @@ function App() {
     ? (data.totalAgency - prevYearData.totalAgency) / prevYearData.totalAgency 
     : 0
 
+  // Calculate revenue YoY change
+  const prevRevenueData = selectedYear > 2019 ? generateRevenueForYear(selectedYear - 1) : null
+  const revenueYoyChange = prevRevenueData 
+    ? (revenueData.totalRevenue - prevRevenueData.totalRevenue) / prevRevenueData.totalRevenue 
+    : 0
+
   const overview = {
     fiscal_year: selectedYear,
     total_outlays: data.totalAgency,
     total_outlays_formatted: formatCurrencyStatic(data.totalAgency),
+    total_revenue: revenueData.totalRevenue,
+    total_revenue_formatted: formatCurrencyStatic(revenueData.totalRevenue),
+    deficit: deficit,
+    deficit_formatted: formatCurrencyStatic(Math.abs(deficit)),
     agency_count: data.agencies.length,
     top_agencies: data.agencies.slice(0, 5),
-    year_over_year_change: overviewYoyChange
+    top_revenue_sources: revenueData.revenues.slice(0, 3),
+    year_over_year_change: overviewYoyChange,
+    revenue_yoy_change: revenueYoyChange
   }
 
   const agencies = { agencies: data.agencies, fiscal_year: selectedYear }
   const states = { states: data.states, fiscal_year: selectedYear }
+  const revenue = { revenues: revenueData.revenues, total: revenueData.totalRevenue, fiscal_year: selectedYear }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -412,6 +605,7 @@ function App() {
           <nav className="flex gap-8">
             {[
               { id: 'overview', label: 'Overview' },
+              { id: 'revenue', label: 'Revenue' },
               { id: 'agencies', label: 'Agencies' },
               { id: 'states', label: 'States' }
             ].map(tab => (
@@ -434,7 +628,7 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {activeTab === 'overview' && overview && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard 
                 title="Total Federal Spending" 
                 value={overview.total_outlays_formatted}
@@ -442,10 +636,16 @@ function App() {
                 change={overview.year_over_year_change}
               />
               <StatCard 
-                title="Number of Agencies" 
-                value={overview.agency_count}
-                subtitle="Major federal agencies"
+                title="Total Federal Revenue" 
+                value={overview.total_revenue_formatted}
+                subtitle={`FY ${overview.fiscal_year}`}
+                change={overview.revenue_yoy_change}
               />
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Budget Deficit</p>
+                <p className="text-3xl font-bold text-red-600 mt-2">-{overview.deficit_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">Spending exceeds revenue</p>
+              </div>
               <StatCard 
                 title="Top Agency" 
                 value={overview.top_agencies[0]?.outlays_formatted}
@@ -455,12 +655,84 @@ function App() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">6-Year Spending Trend</h3>
-                {trend && <TrendChart data={trend.years} />}
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue vs Spending Trend</h3>
+                <div className="flex gap-4 mb-2 text-sm">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded"></span> Revenue</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded"></span> Spending</span>
+                </div>
+                {trend && <RevenueTrendChart data={trend.years} />}
               </div>
               <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 5 Agencies</h3>
                 <AgencyChart agencies={overview.top_agencies} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'revenue' && revenue && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <StatCard 
+                title="Total Federal Revenue" 
+                value={formatCurrencyStatic(revenue.total)}
+                subtitle={`FY ${revenue.fiscal_year}`}
+                change={revenueYoyChange}
+              />
+              <StatCard 
+                title="Top Revenue Source" 
+                value={revenue.revenues[0]?.amount_formatted}
+                subtitle={revenue.revenues[0]?.name}
+              />
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Budget Deficit</p>
+                <p className="text-3xl font-bold text-red-600 mt-2">-{formatCurrencyStatic(Math.abs(deficit))}</p>
+                <p className="text-sm text-gray-500 mt-1">{((deficit / revenue.total) * 100).toFixed(0)}% of revenue</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue by Source - FY {revenue.fiscal_year}</h3>
+                <RevenueChart revenues={revenue.revenues} />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue vs Spending Trend</h3>
+                <div className="flex gap-4 mb-2 text-sm">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded"></span> Revenue</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded"></span> Spending</span>
+                </div>
+                {trend && <RevenueTrendChart data={trend.years} />}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">All Revenue Sources - FY {revenue.fiscal_year}</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% of Total</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">YoY Change</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {revenue.revenues.map((source, idx) => (
+                      <tr key={source.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4 font-medium text-gray-900">{source.name}</td>
+                        <td className="px-6 py-4 text-gray-900">{source.amount_formatted}</td>
+                        <td className="px-6 py-4 text-gray-500">{source.percent_of_total.toFixed(1)}%</td>
+                        <td className="px-6 py-4">
+                          <span className={source.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {source.yoy_change >= 0 ? '+' : ''}{(source.yoy_change * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
