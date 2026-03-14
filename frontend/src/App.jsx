@@ -1314,7 +1314,7 @@ function App() {
       {/* Project Header */}
       <div className="bg-blue-900 text-white py-2 sm:py-3">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <h1 className="text-base sm:text-xl font-bold text-center">Neil Mahajan Federal Spending Analysis</h1>
+          <h1 className="text-base sm:text-xl font-bold text-center">Federal Spending Analysis by Neil M.</h1>
         </div>
       </div>
       
