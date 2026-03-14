@@ -223,6 +223,86 @@ function generateDebtDataForYear(year, revenueTotal, interestPayment) {
   }
 }
 
+// Federal Workforce Data - Civilian employees by agency
+// FY2019 baseline: ~2.1 million total federal civilian employees
+const WORKFORCE_AGENCIES = [
+  { code: 'DOD', name: 'Defense (Civilian)', base_employees: 750000, avg_salary: 85000, annual_growth: 0.005, covid_change: 1.02 },
+  { code: 'VA', name: 'Veterans Affairs', base_employees: 380000, avg_salary: 78000, annual_growth: 0.04, covid_change: 1.08 },
+  { code: 'DHS', name: 'Homeland Security', base_employees: 240000, avg_salary: 82000, annual_growth: 0.015, covid_change: 1.03 },
+  { code: 'DOJ', name: 'Justice', base_employees: 115000, avg_salary: 90000, annual_growth: 0.01, covid_change: 1.01 },
+  { code: 'TRES', name: 'Treasury', base_employees: 90000, avg_salary: 88000, annual_growth: -0.01, covid_change: 0.98 },
+  { code: 'USDA', name: 'Agriculture', base_employees: 85000, avg_salary: 72000, annual_growth: 0.005, covid_change: 1.0 },
+  { code: 'HHS', name: 'Health & Human Services', base_employees: 80000, avg_salary: 95000, annual_growth: 0.025, covid_change: 1.12 },
+  { code: 'DOI', name: 'Interior', base_employees: 65000, avg_salary: 70000, annual_growth: 0.0, covid_change: 0.98 },
+  { code: 'SSA', name: 'Social Security Admin', base_employees: 60000, avg_salary: 75000, annual_growth: -0.015, covid_change: 0.97 },
+  { code: 'OTHER', name: 'All Other Agencies', base_employees: 235000, avg_salary: 80000, annual_growth: 0.01, covid_change: 1.02 },
+]
+
+// Contractor spending data (complements federal workforce)
+const CONTRACTOR_DATA = {
+  2019: { spending: 560e9, estimated_fte: 4200000 },  // Estimated full-time equivalent contractors
+  2020: { spending: 610e9, estimated_fte: 4400000 },  // COVID surge
+  2021: { spending: 650e9, estimated_fte: 4500000 },
+  2022: { spending: 680e9, estimated_fte: 4600000 },
+  2023: { spending: 710e9, estimated_fte: 4700000 },
+  2024: { spending: 740e9, estimated_fte: 4800000 },
+  2025: { spending: 770e9, estimated_fte: 4900000 },
+}
+
+// Generate workforce data for a given year
+function generateWorkforceDataForYear(year) {
+  const agencies = WORKFORCE_AGENCIES.map(a => {
+    const yearsFromBase = year - 2019
+    const growth = Math.pow(1 + a.annual_growth, yearsFromBase)
+    const covidFactor = (year === 2020 || year === 2021) ? a.covid_change : 1.0
+    
+    const employees = Math.round(a.base_employees * growth * covidFactor)
+    const salaryGrowth = Math.pow(1.025, yearsFromBase)  // ~2.5% annual salary growth
+    const avgSalary = Math.round(a.avg_salary * salaryGrowth)
+    const totalComp = employees * avgSalary
+    
+    // Calculate YoY change
+    const prevYearsFromBase = year - 1 - 2019
+    const prevGrowth = prevYearsFromBase >= 0 ? Math.pow(1 + a.annual_growth, prevYearsFromBase) : 1
+    const prevCovidFactor = (year - 1 === 2020 || year - 1 === 2021) ? a.covid_change : 1.0
+    const prevEmployees = Math.round(a.base_employees * prevGrowth * prevCovidFactor)
+    const yoy_change = year > 2019 ? (employees - prevEmployees) / prevEmployees : 0
+    
+    return {
+      code: a.code,
+      name: a.name,
+      employees,
+      employees_formatted: employees.toLocaleString(),
+      avg_salary: avgSalary,
+      avg_salary_formatted: `$${avgSalary.toLocaleString()}`,
+      total_compensation: totalComp,
+      total_compensation_formatted: formatCurrencyStatic(totalComp),
+      percent_of_total: 0,
+      yoy_change
+    }
+  })
+  
+  const totalEmployees = agencies.reduce((sum, a) => sum + a.employees, 0)
+  const totalCompensation = agencies.reduce((sum, a) => sum + a.total_compensation, 0)
+  agencies.forEach(a => { a.percent_of_total = (a.employees / totalEmployees) * 100 })
+  
+  // Contractor data for comparison
+  const contractors = CONTRACTOR_DATA[year] || CONTRACTOR_DATA[2025]
+  
+  return {
+    agencies,
+    totalEmployees,
+    totalEmployees_formatted: totalEmployees.toLocaleString(),
+    totalCompensation,
+    totalCompensation_formatted: formatCurrencyStatic(totalCompensation),
+    avgSalaryAll: Math.round(totalCompensation / totalEmployees),
+    contractorSpending: contractors.spending,
+    contractorSpending_formatted: formatCurrencyStatic(contractors.spending),
+    contractorFTE: contractors.estimated_fte,
+    contractorFTE_formatted: contractors.estimated_fte.toLocaleString(),
+  }
+}
+
 const SAMPLE_STATES = [
   { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
   { code: 'TX', name: 'Texas', base_spending: 398e9, population: 29145505 },
@@ -712,6 +792,60 @@ function DebtToGdpChart({ data }) {
   )
 }
 
+function WorkforceChart({ agencies }) {
+  const data = agencies.slice(0, 8).map(a => ({
+    name: a.name.replace('Department of ', '').replace(' Admin', ''),
+    employees: a.employees,
+    compensation: a.total_compensation
+  }))
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} layout="vertical" margin={{ left: 20, right: 30 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+        <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+        <Tooltip formatter={(v) => v.toLocaleString()} />
+        <Bar dataKey="employees" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function WorkforceTrendChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="fiscal_year" />
+        <YAxis tickFormatter={(v) => `${(v / 1e6).toFixed(1)}M`} />
+        <Tooltip 
+          formatter={(v, name) => [v.toLocaleString(), name]} 
+          labelFormatter={(l) => `FY ${l}`} 
+        />
+        <Legend />
+        <Line 
+          type="monotone" 
+          dataKey="federal" 
+          name="Federal Employees"
+          stroke="#8B5CF6" 
+          strokeWidth={3}
+          dot={{ fill: '#8B5CF6', strokeWidth: 2 }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey="contractors" 
+          name="Contractors (Est.)"
+          stroke="#F59E0B" 
+          strokeWidth={3}
+          strokeDasharray="5 5"
+          dot={{ fill: '#F59E0B', strokeWidth: 2 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
 function USMap({ states, onStateHover }) {
   const [hoveredState, setHoveredState] = useState(null)
   
@@ -887,6 +1021,22 @@ function App() {
     })
   }), [])
 
+  // Generate workforce data for selected year
+  const workforceData = useMemo(() => generateWorkforceDataForYear(selectedYear), [selectedYear])
+  
+  // Generate workforce trend data
+  const workforceTrend = useMemo(() => ({
+    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+      const yearWorkforce = generateWorkforceDataForYear(year)
+      return { 
+        fiscal_year: year, 
+        federal: yearWorkforce.totalEmployees,
+        contractors: yearWorkforce.contractorFTE,
+        compensation: yearWorkforce.totalCompensation
+      }
+    })
+  }), [])
+
   // Calculate actual overview YoY change
   const prevYearData = selectedYear > 2019 ? generateDataForYear(selectedYear - 1) : null
   const overviewYoyChange = prevYearData 
@@ -927,6 +1077,11 @@ function App() {
   
   const debt = {
     ...debtData,
+    fiscal_year: selectedYear
+  }
+  
+  const workforce = {
+    ...workforceData,
     fiscal_year: selectedYear
   }
 
@@ -970,6 +1125,7 @@ function App() {
               { id: 'revenue', label: 'Revenue' },
               { id: 'budget', label: 'Budget' },
               { id: 'debt', label: 'Debt' },
+              { id: 'workforce', label: 'Workforce' },
               { id: 'agencies', label: 'Agencies' },
               { id: 'states', label: 'States' }
             ].map(tab => (
@@ -1302,6 +1458,92 @@ function App() {
                 <li><strong>Interest crowding out:</strong> As interest payments grow, less is available for programs and investments.</li>
                 <li><strong>Public debt matters most:</strong> This is what the government owes to external creditors and must pay interest on.</li>
                 <li><strong>Sustainability concern:</strong> If interest rates rise or GDP slows, debt servicing becomes more difficult.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'workforce' && workforce && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Federal Civilian Employees</p>
+                <p className="text-3xl font-bold text-purple-600 mt-2">{workforce.totalEmployees_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">FY {workforce.fiscal_year}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Total Personnel Cost</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{workforce.totalCompensation_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">Salaries & benefits</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Avg. Federal Salary</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">${workforce.avgSalaryAll.toLocaleString()}</p>
+                <p className="text-sm text-gray-500 mt-1">Across all agencies</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <p className="text-sm font-medium text-gray-500">Contractor Spending</p>
+                <p className="text-3xl font-bold text-amber-600 mt-2">{workforce.contractorSpending_formatted}</p>
+                <p className="text-sm text-gray-500 mt-1">~{workforce.contractorFTE_formatted} est. FTEs</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Employees by Agency - FY {workforce.fiscal_year}</h3>
+                <WorkforceChart agencies={workforce.agencies} />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Federal vs Contractor Workforce Trend</h3>
+                <div className="flex gap-4 mb-2 text-sm">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-purple-600 rounded"></span> Federal</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-500 rounded"></span> Contractors</span>
+                </div>
+                {workforceTrend && <WorkforceTrendChart data={workforceTrend.years} />}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Federal Workforce by Agency - FY {workforce.fiscal_year}</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agency</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employees</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Salary</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Compensation</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% of Workforce</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">YoY Change</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {workforce.agencies.map((agency, idx) => (
+                      <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4 font-medium text-gray-900">{agency.name}</td>
+                        <td className="px-6 py-4 text-gray-900">{agency.employees_formatted}</td>
+                        <td className="px-6 py-4 text-gray-900">{agency.avg_salary_formatted}</td>
+                        <td className="px-6 py-4 text-gray-900">{agency.total_compensation_formatted}</td>
+                        <td className="px-6 py-4 text-gray-500">{agency.percent_of_total.toFixed(1)}%</td>
+                        <td className="px-6 py-4">
+                          <span className={agency.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {agency.yoy_change >= 0 ? '+' : ''}{(agency.yoy_change * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 rounded-xl border border-purple-200 p-6">
+              <h4 className="font-semibold text-purple-800 mb-2">Understanding the Federal Workforce</h4>
+              <ul className="text-sm text-purple-700 space-y-1">
+                <li><strong>Civilian vs Military:</strong> This shows civilian employees only. Active duty military (~1.3M) is separate.</li>
+                <li><strong>Contractors outnumber feds:</strong> For every federal employee, there are ~2+ contractor workers doing government work.</li>
+                <li><strong>VA is fastest growing:</strong> Driven by increased veteran healthcare needs and benefits processing.</li>
+                <li><strong>Automation impact:</strong> Treasury & SSA declining as processes become automated.</li>
               </ul>
             </div>
           </div>
