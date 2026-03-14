@@ -225,6 +225,7 @@ function generateDebtDataForYear(year, revenueTotal, interestPayment) {
 
 // Federal Workforce Data - Civilian employees by agency
 // FY2019 baseline: ~2.1 million total federal civilian employees
+// FY2025 saw major reductions (~350K) due to DOGE, buyouts, layoffs, and hiring freezes
 const WORKFORCE_AGENCIES = [
   { code: 'DOD', name: 'Defense (Civilian)', base_employees: 750000, avg_salary: 85000, annual_growth: 0.005, covid_change: 1.02 },
   { code: 'VA', name: 'Veterans Affairs', base_employees: 380000, avg_salary: 78000, annual_growth: 0.04, covid_change: 1.08 },
@@ -238,7 +239,30 @@ const WORKFORCE_AGENCIES = [
   { code: 'OTHER', name: 'All Other Agencies', base_employees: 235000, avg_salary: 80000, annual_growth: 0.01, covid_change: 1.02 },
 ]
 
+// Year-specific workforce adjustments
+// FY2025: Major DOGE-driven reductions - ~350K total cut through buyouts, RIFs, and attrition
+const WORKFORCE_YEAR_ADJUSTMENTS = {
+  2020: {}, // COVID - handled by covid_change factor
+  2021: {},
+  2022: {},
+  2023: {},
+  2024: {}, // Peak federal employment
+  2025: {   // DOGE cuts - agencies hit differently
+    DOD: 0.82,     // -18% (~140K cut) - largest civilian workforce took biggest hit
+    VA: 0.92,      // -8% (~35K cut) - protected but still reduced
+    DHS: 0.88,     // -12% (~30K cut) - CBP/ICE exempted, admin cut
+    DOJ: 0.90,     // -10% (~12K cut) - DOJ reduced
+    TRES: 0.75,    // -25% (~23K cut) - IRS cuts significant
+    USDA: 0.80,    // -20% (~17K cut) - Rural programs cut
+    HHS: 0.78,     // -22% (~20K cut) - Public health agencies hit hard
+    DOI: 0.82,     // -18% (~12K cut) - Land management reduced
+    SSA: 0.85,     // -15% (~9K cut) - Automation + RIFs
+    OTHER: 0.75,   // -25% (~52K cut) - USAID, EPA, Education, CFPB gutted
+  }
+}
+
 // Contractor spending data (complements federal workforce)
+// FY2025: Despite workforce cuts, contractor spending stayed high as agencies outsourced
 const CONTRACTOR_DATA = {
   2019: { spending: 560e9, estimated_fte: 4200000 },  // Estimated full-time equivalent contractors
   2020: { spending: 610e9, estimated_fte: 4400000 },  // COVID surge
@@ -246,7 +270,7 @@ const CONTRACTOR_DATA = {
   2022: { spending: 680e9, estimated_fte: 4600000 },
   2023: { spending: 710e9, estimated_fte: 4700000 },
   2024: { spending: 740e9, estimated_fte: 4800000 },
-  2025: { spending: 770e9, estimated_fte: 4900000 },
+  2025: { spending: 720e9, estimated_fte: 4600000 },  // Slight decrease - some contracts canceled by DOGE
 }
 
 // Top Federal Contractors (FY2019 baseline)
@@ -369,16 +393,20 @@ function generateWorkforceDataForYear(year) {
     const growth = Math.pow(1 + a.annual_growth, yearsFromBase)
     const covidFactor = (year === 2020 || year === 2021) ? a.covid_change : 1.0
     
-    const employees = Math.round(a.base_employees * growth * covidFactor)
+    // Apply year-specific adjustments (e.g., 2025 DOGE cuts)
+    const yearAdjustment = WORKFORCE_YEAR_ADJUSTMENTS[year]?.[a.code] || 1.0
+    
+    const employees = Math.round(a.base_employees * growth * covidFactor * yearAdjustment)
     const salaryGrowth = Math.pow(1.025, yearsFromBase)  // ~2.5% annual salary growth
     const avgSalary = Math.round(a.avg_salary * salaryGrowth)
     const totalComp = employees * avgSalary
     
-    // Calculate YoY change
+    // Calculate YoY change (need to include year adjustments for both years)
     const prevYearsFromBase = year - 1 - 2019
     const prevGrowth = prevYearsFromBase >= 0 ? Math.pow(1 + a.annual_growth, prevYearsFromBase) : 1
     const prevCovidFactor = (year - 1 === 2020 || year - 1 === 2021) ? a.covid_change : 1.0
-    const prevEmployees = Math.round(a.base_employees * prevGrowth * prevCovidFactor)
+    const prevYearAdjustment = WORKFORCE_YEAR_ADJUSTMENTS[year - 1]?.[a.code] || 1.0
+    const prevEmployees = Math.round(a.base_employees * prevGrowth * prevCovidFactor * prevYearAdjustment)
     const yoy_change = year > 2019 ? (employees - prevEmployees) / prevEmployees : 0
     
     return {
@@ -1737,8 +1765,8 @@ function App() {
               <h4 className="font-semibold text-purple-800 mb-2 text-sm sm:text-base">Understanding the Federal Workforce</h4>
               <ul className="text-xs sm:text-sm text-purple-700 space-y-1">
                 <li><strong>Civilian only:</strong> Active duty military (~1.3M) is separate.</li>
-                <li><strong>Contractors outnumber feds:</strong> ~2+ contractor workers per fed.</li>
-                <li><strong>VA fastest growing:</strong> Veteran healthcare needs increasing.</li>
+                <li><strong>FY2025 DOGE cuts:</strong> ~350K federal employees cut via buyouts, layoffs, and hiring freezes.</li>
+                <li><strong>Hardest hit:</strong> IRS, USAID, EPA, Education, HHS saw 20-25% reductions.</li>
               </ul>
             </div>
           </div>
