@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line
+  LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts'
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 
@@ -103,6 +103,82 @@ const REVENUE_YEAR_ADJUSTMENTS = {
   2025: { individual: 1.03, corporate: 1.05 }, // Projected growth
 }
 
+// Budget Categories - How Congress views spending
+// Mandatory (~65%): Automatic by law, Discretionary (~30%): Annual appropriation, Interest (~5%): Debt payments
+const BUDGET_CATEGORIES = [
+  // MANDATORY SPENDING - Programs that run automatically by law (entitlements)
+  { 
+    code: 'social_security', 
+    name: 'Social Security', 
+    category: 'mandatory',
+    base: 1000e9,         // Largest single program
+    annual_growth: 0.05,  // 5% - aging population, COLA adjustments
+    covid_boost: 1.03     // Slight increase (more claims)
+  },
+  { 
+    code: 'medicare', 
+    name: 'Medicare', 
+    category: 'mandatory',
+    base: 750e9,          // Second largest
+    annual_growth: 0.06,  // 6% - healthcare costs + aging
+    covid_boost: 1.15     // COVID hospitalizations
+  },
+  { 
+    code: 'medicaid', 
+    name: 'Medicaid', 
+    category: 'mandatory',
+    base: 410e9,          // State-federal program
+    annual_growth: 0.04,  // 4% growth
+    covid_boost: 1.25     // Expanded enrollment during pandemic
+  },
+  { 
+    code: 'other_mandatory', 
+    name: 'Other Mandatory', 
+    category: 'mandatory',
+    base: 640e9,          // Income security, SNAP, unemployment, veterans
+    annual_growth: 0.025, // Modest growth
+    covid_boost: 1.65     // Massive spike (unemployment, stimulus checks)
+  },
+  
+  // DISCRETIONARY SPENDING - Requires annual congressional appropriation
+  { 
+    code: 'defense', 
+    name: 'Defense', 
+    category: 'discretionary',
+    base: 700e9,          // Department of Defense
+    annual_growth: 0.025, // 2.5% baseline
+    covid_boost: 1.02     // Minimal COVID impact
+  },
+  { 
+    code: 'nondefense', 
+    name: 'Non-Defense Discretionary', 
+    category: 'discretionary',
+    base: 660e9,          // Education, transportation, HHS programs, etc.
+    annual_growth: 0.02,  // 2% baseline
+    covid_boost: 1.35     // COVID relief, education aid
+  },
+  
+  // NET INTEREST - Payments on the national debt
+  { 
+    code: 'net_interest', 
+    name: 'Net Interest', 
+    category: 'interest',
+    base: 380e9,          // Growing concern
+    annual_growth: 0.08,  // 8% - debt growing, rates rising
+    covid_boost: 0.85     // Actually lower (Fed held rates low)
+  },
+]
+
+// Year-specific adjustments for budget categories
+const CATEGORY_YEAR_ADJUSTMENTS = {
+  2020: { other_mandatory: 1.8, nondefense: 1.3 },  // CARES Act, stimulus
+  2021: { other_mandatory: 1.5, nondefense: 1.25, medicaid: 1.1 },  // American Rescue Plan
+  2022: { nondefense: 1.15, net_interest: 1.2 },   // Infrastructure, rates rising
+  2023: { defense: 1.08, net_interest: 1.35 },     // Defense boost, higher rates
+  2024: { net_interest: 1.25 },                    // Continued rate pressure
+  2025: { defense: 1.05, net_interest: 1.15 },     // Projected
+}
+
 const SAMPLE_STATES = [
   { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
   { code: 'TX', name: 'Texas', base_spending: 398e9, population: 29145505 },
@@ -199,6 +275,63 @@ function generateRevenueForYear(year) {
   revenues.forEach(r => { r.percent_of_total = (r.amount / totalRevenue) * 100 })
   
   return { revenues, totalRevenue }
+}
+
+// Generate budget category data for a given fiscal year
+function generateBudgetCategoriesForYear(year) {
+  const categories = BUDGET_CATEGORIES.map(c => {
+    const yearsFromBase = year - 2019
+    const growth = Math.pow(1 + c.annual_growth, yearsFromBase)
+    
+    // COVID impact in 2020-2021
+    const covidFactor = (year === 2020 || year === 2021) ? c.covid_boost : 1.0
+    
+    // Year-specific adjustments
+    const yearAdj = CATEGORY_YEAR_ADJUSTMENTS[year]?.[c.code] || 1.0
+    
+    // Round to nearest million
+    const amount = Math.round(c.base * growth * covidFactor * yearAdj / 1e6) * 1e6
+    
+    // Calculate previous year for YoY
+    const prevYearsFromBase = year - 1 - 2019
+    const prevGrowth = prevYearsFromBase >= 0 ? Math.pow(1 + c.annual_growth, prevYearsFromBase) : 1
+    const prevCovidFactor = (year - 1 === 2020 || year - 1 === 2021) ? c.covid_boost : 1.0
+    const prevYearAdj = CATEGORY_YEAR_ADJUSTMENTS[year - 1]?.[c.code] || 1.0
+    const prevAmount = Math.round(c.base * prevGrowth * prevCovidFactor * prevYearAdj / 1e6) * 1e6
+    
+    const yoy_change = year > 2019 ? (amount - prevAmount) / prevAmount : 0
+    
+    return {
+      code: c.code,
+      name: c.name,
+      category: c.category,
+      amount,
+      amount_formatted: formatCurrencyStatic(amount),
+      percent_of_total: 0,
+      yoy_change
+    }
+  })
+  
+  const totalSpending = categories.reduce((sum, c) => sum + c.amount, 0)
+  categories.forEach(c => { c.percent_of_total = (c.amount / totalSpending) * 100 })
+  
+  // Calculate category totals
+  const mandatory = categories.filter(c => c.category === 'mandatory')
+  const discretionary = categories.filter(c => c.category === 'discretionary')
+  const interest = categories.filter(c => c.category === 'interest')
+  
+  const totals = {
+    mandatory: mandatory.reduce((sum, c) => sum + c.amount, 0),
+    discretionary: discretionary.reduce((sum, c) => sum + c.amount, 0),
+    interest: interest.reduce((sum, c) => sum + c.amount, 0),
+  }
+  
+  return { 
+    categories, 
+    totalSpending,
+    totals,
+    byType: { mandatory, discretionary, interest }
+  }
 }
 
 function generateDataForYear(year) {
@@ -377,7 +510,7 @@ function RevenueTrendChart({ data }) {
         <XAxis dataKey="fiscal_year" />
         <YAxis tickFormatter={formatCurrency} />
         <Tooltip 
-          formatter={(v, name) => [formatCurrency(v), name === 'total_revenue' ? 'Revenue' : 'Spending']} 
+          formatter={(v, name) => [formatCurrency(v), name]} 
           labelFormatter={(l) => `FY ${l}`} 
         />
         <Line 
@@ -398,6 +531,71 @@ function RevenueTrendChart({ data }) {
           dot={{ fill: '#3B82F6', strokeWidth: 2 }}
         />
       </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+// Color scheme for budget categories
+const CATEGORY_COLORS = {
+  mandatory: '#EF4444',    // Red - urgent, automatic spending
+  discretionary: '#3B82F6', // Blue - controllable, appropriated
+  interest: '#6B7280',      // Gray - unavoidable debt cost
+}
+
+const PROGRAM_COLORS = {
+  social_security: '#DC2626',
+  medicare: '#F87171',
+  medicaid: '#FB923C',
+  other_mandatory: '#FBBF24',
+  defense: '#3B82F6',
+  nondefense: '#60A5FA',
+  net_interest: '#6B7280',
+}
+
+function CategoryPieChart({ totals, totalSpending }) {
+  const data = [
+    { name: 'Mandatory', value: totals.mandatory, color: CATEGORY_COLORS.mandatory },
+    { name: 'Discretionary', value: totals.discretionary, color: CATEGORY_COLORS.discretionary },
+    { name: 'Net Interest', value: totals.interest, color: CATEGORY_COLORS.interest },
+  ]
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          innerRadius={60}
+          outerRadius={100}
+          paddingAngle={2}
+          dataKey="value"
+          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          labelLine={false}
+        >
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.color} />
+          ))}
+        </Pie>
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
+function CategoryTrendChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="fiscal_year" />
+        <YAxis tickFormatter={formatCurrency} />
+        <Tooltip formatter={(v) => formatCurrency(v)} />
+        <Legend />
+        <Bar dataKey="mandatory" name="Mandatory" stackId="a" fill={CATEGORY_COLORS.mandatory} />
+        <Bar dataKey="discretionary" name="Discretionary" stackId="a" fill={CATEGORY_COLORS.discretionary} />
+        <Bar dataKey="interest" name="Net Interest" stackId="a" fill={CATEGORY_COLORS.interest} />
+      </BarChart>
     </ResponsiveContainer>
   )
 }
@@ -520,6 +718,9 @@ function App() {
   // Generate revenue data for selected year
   const revenueData = useMemo(() => generateRevenueForYear(selectedYear), [selectedYear])
   
+  // Generate budget category data for selected year
+  const budgetData = useMemo(() => generateBudgetCategoriesForYear(selectedYear), [selectedYear])
+  
   // Calculate deficit (spending - revenue)
   const deficit = data.totalAgency - revenueData.totalRevenue
   
@@ -533,6 +734,20 @@ function App() {
         total_outlays: yearData.totalAgency,
         total_revenue: yearRevenue.totalRevenue,
         deficit: yearData.totalAgency - yearRevenue.totalRevenue
+      }
+    })
+  }), [])
+
+  // Generate budget category trend data
+  const categoryTrend = useMemo(() => ({
+    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+      const yearBudget = generateBudgetCategoriesForYear(year)
+      return { 
+        fiscal_year: year, 
+        mandatory: yearBudget.totals.mandatory,
+        discretionary: yearBudget.totals.discretionary,
+        interest: yearBudget.totals.interest,
+        total: yearBudget.totalSpending
       }
     })
   }), [])
@@ -567,6 +782,13 @@ function App() {
   const agencies = { agencies: data.agencies, fiscal_year: selectedYear }
   const states = { states: data.states, fiscal_year: selectedYear }
   const revenue = { revenues: revenueData.revenues, total: revenueData.totalRevenue, fiscal_year: selectedYear }
+  const budget = { 
+    categories: budgetData.categories, 
+    totals: budgetData.totals,
+    byType: budgetData.byType,
+    totalSpending: budgetData.totalSpending, 
+    fiscal_year: selectedYear 
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -606,6 +828,7 @@ function App() {
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'revenue', label: 'Revenue' },
+              { id: 'budget', label: 'Budget' },
               { id: 'agencies', label: 'Agencies' },
               { id: 'states', label: 'States' }
             ].map(tab => (
@@ -734,6 +957,97 @@ function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'budget' && budget && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <p className="text-sm font-medium text-gray-500">Mandatory Spending</p>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrencyStatic(budget.totals.mandatory)}</p>
+                <p className="text-sm text-gray-500 mt-1">{((budget.totals.mandatory / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <p className="text-sm font-medium text-gray-500">Discretionary Spending</p>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrencyStatic(budget.totals.discretionary)}</p>
+                <p className="text-sm text-gray-500 mt-1">{((budget.totals.discretionary / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                  <p className="text-sm font-medium text-gray-500">Net Interest</p>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrencyStatic(budget.totals.interest)}</p>
+                <p className="text-sm text-gray-500 mt-1">{((budget.totals.interest / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Budget Composition - FY {budget.fiscal_year}</h3>
+                <CategoryPieChart totals={budget.totals} totalSpending={budget.totalSpending} />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Trends Over Time</h3>
+                {categoryTrend && <CategoryTrendChart data={categoryTrend.years} />}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">All Budget Categories - FY {budget.fiscal_year}</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% of Total</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">YoY Change</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {budget.categories.map((cat, idx) => (
+                      <tr key={cat.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            cat.category === 'mandatory' ? 'bg-red-100 text-red-800' :
+                            cat.category === 'discretionary' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {cat.category.charAt(0).toUpperCase() + cat.category.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-900">{cat.name}</td>
+                        <td className="px-6 py-4 text-gray-900">{cat.amount_formatted}</td>
+                        <td className="px-6 py-4 text-gray-500">{cat.percent_of_total.toFixed(1)}%</td>
+                        <td className="px-6 py-4">
+                          <span className={cat.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            {cat.yoy_change >= 0 ? '+' : ''}{(cat.yoy_change * 100).toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
+              <h4 className="font-semibold text-amber-800 mb-2">Understanding Budget Categories</h4>
+              <ul className="text-sm text-amber-700 space-y-1">
+                <li><strong>Mandatory (65%):</strong> Spending required by law - Social Security, Medicare, Medicaid. Grows automatically.</li>
+                <li><strong>Discretionary (30%):</strong> Requires annual congressional appropriation - defense, education, transportation.</li>
+                <li><strong>Net Interest (5%):</strong> Interest payments on the national debt. Growing rapidly as debt increases.</li>
+              </ul>
             </div>
           </div>
         )}
