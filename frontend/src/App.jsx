@@ -8,18 +8,29 @@ import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
 
 // Embedded sample data for GitHub Pages (no backend required)
+// Each agency has unique growth patterns and COVID impacts
 const SAMPLE_AGENCIES = [
-  { code: '075', name: 'Department of Health and Human Services', base_oblig: 1800e9, base_outlay: 1750e9, base_budget: 1900e9 },
-  { code: '028', name: 'Social Security Administration', base_oblig: 1400e9, base_outlay: 1350e9, base_budget: 1450e9 },
-  { code: '097', name: 'Department of Defense', base_oblig: 850e9, base_outlay: 820e9, base_budget: 900e9 },
-  { code: '020', name: 'Department of the Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9 },
-  { code: '036', name: 'Department of Veterans Affairs', base_oblig: 320e9, base_outlay: 310e9, base_budget: 340e9 },
-  { code: '012', name: 'Department of Agriculture', base_oblig: 220e9, base_outlay: 210e9, base_budget: 240e9 },
-  { code: '091', name: 'Department of Education', base_oblig: 180e9, base_outlay: 175e9, base_budget: 200e9 },
-  { code: '069', name: 'Department of Transportation', base_oblig: 120e9, base_outlay: 115e9, base_budget: 130e9 },
-  { code: '024', name: 'Department of Homeland Security', base_oblig: 85e9, base_outlay: 82e9, base_budget: 90e9 },
-  { code: '015', name: 'Department of Justice', base_oblig: 42e9, base_outlay: 40e9, base_budget: 45e9 },
+  { code: '075', name: 'Department of Health and Human Services', base_oblig: 1800e9, base_outlay: 1750e9, base_budget: 1900e9, annual_growth: 0.045, covid_boost: 1.35 },
+  { code: '028', name: 'Social Security Administration', base_oblig: 1400e9, base_outlay: 1350e9, base_budget: 1450e9, annual_growth: 0.025, covid_boost: 1.08 },
+  { code: '097', name: 'Department of Defense', base_oblig: 850e9, base_outlay: 820e9, base_budget: 900e9, annual_growth: 0.02, covid_boost: 1.02 },
+  { code: '020', name: 'Department of the Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9, annual_growth: 0.015, covid_boost: 1.85 },
+  { code: '036', name: 'Department of Veterans Affairs', base_oblig: 320e9, base_outlay: 310e9, base_budget: 340e9, annual_growth: 0.04, covid_boost: 1.12 },
+  { code: '012', name: 'Department of Agriculture', base_oblig: 220e9, base_outlay: 210e9, base_budget: 240e9, annual_growth: 0.02, covid_boost: 1.25 },
+  { code: '091', name: 'Department of Education', base_oblig: 180e9, base_outlay: 175e9, base_budget: 200e9, annual_growth: 0.01, covid_boost: 1.45 },
+  { code: '069', name: 'Department of Transportation', base_oblig: 120e9, base_outlay: 115e9, base_budget: 130e9, annual_growth: 0.035, covid_boost: 0.92 },
+  { code: '024', name: 'Department of Homeland Security', base_oblig: 85e9, base_outlay: 82e9, base_budget: 90e9, annual_growth: 0.03, covid_boost: 1.15 },
+  { code: '015', name: 'Department of Justice', base_oblig: 42e9, base_outlay: 40e9, base_budget: 45e9, annual_growth: 0.025, covid_boost: 1.05 },
 ]
+
+// Year-specific adjustments for certain agencies (e.g., stimulus, infrastructure bills)
+const YEAR_ADJUSTMENTS = {
+  2020: { '020': 1.5, '091': 1.2 },  // Treasury stimulus, Education relief
+  2021: { '020': 1.4, '091': 1.3, '069': 1.1 },  // More stimulus, education, infrastructure
+  2022: { '069': 1.25 },  // Infrastructure bill kicks in
+  2023: { '069': 1.3, '097': 1.05 },  // Infrastructure continues, defense boost
+  2024: { '069': 1.2, '075': 1.05 },  // Infrastructure, healthcare expansion
+  2025: { '097': 1.08, '024': 1.1 },  // Defense & security increases
+}
 
 const SAMPLE_STATES = [
   { code: 'CA', name: 'California', base_spending: 512e9, population: 39538223 },
@@ -76,19 +87,28 @@ const SAMPLE_STATES = [
 ]
 
 function generateDataForYear(year) {
-  // 2019 is baseline (growth = 1.0), 3% annual growth after
-  const growth = 1 + (year - 2019) * 0.03
-  const covidSpike = (year === 2020 || year === 2021) ? 1.2 : 1.0
-  
-  // Calculate previous year values for YoY comparison
-  const prevGrowth = 1 + (year - 1 - 2019) * 0.03
-  const prevCovidSpike = (year - 1 === 2020 || year - 1 === 2021) ? 1.2 : 1.0
-  
   const agencies = SAMPLE_AGENCIES.map(a => {
-    const outlays = a.base_outlay * growth * covidSpike
-    const prevOutlays = a.base_outlay * prevGrowth * prevCovidSpike
-    // Calculate actual YoY change (0 for 2019 since no prior year)
+    // Agency-specific growth: compound from 2019 baseline
+    const yearsFromBase = year - 2019
+    const growth = Math.pow(1 + a.annual_growth, yearsFromBase)
+    
+    // COVID boost only in 2020-2021, varies by agency
+    const covidMultiplier = (year === 2020 || year === 2021) ? a.covid_boost : 1.0
+    
+    // Year-specific policy adjustments
+    const yearAdj = YEAR_ADJUSTMENTS[year]?.[a.code] || 1.0
+    
+    const outlays = a.base_outlay * growth * covidMultiplier * yearAdj
+    
+    // Calculate previous year for YoY
+    const prevYearsFromBase = year - 1 - 2019
+    const prevGrowth = Math.pow(1 + a.annual_growth, prevYearsFromBase)
+    const prevCovidMultiplier = (year - 1 === 2020 || year - 1 === 2021) ? a.covid_boost : 1.0
+    const prevYearAdj = YEAR_ADJUSTMENTS[year - 1]?.[a.code] || 1.0
+    const prevOutlays = a.base_outlay * prevGrowth * prevCovidMultiplier * prevYearAdj
+    
     const yoy_change = year > 2019 ? (outlays - prevOutlays) / prevOutlays : 0
+    
     return {
       code: a.code,
       name: a.name,
@@ -102,8 +122,13 @@ function generateDataForYear(year) {
   const totalAgency = agencies.reduce((sum, a) => sum + a.outlays, 0)
   agencies.forEach(a => { a.percent_of_total = (a.outlays / totalAgency) * 100 })
   
+  // States use average 3% growth with regional COVID variation
+  const stateBaseGrowth = Math.pow(1.03, year - 2019)
   const states = SAMPLE_STATES.map(s => {
-    const outlays = s.base_spending * growth * (year === 2020 || year === 2021 ? 1.15 : 1.0)
+    // Regional COVID impact varies (coastal/urban states hit harder)
+    const isHighImpact = ['NY', 'NJ', 'CA', 'MA', 'IL', 'MI', 'PA', 'WA'].includes(s.code)
+    const covidFactor = (year === 2020 || year === 2021) ? (isHighImpact ? 1.22 : 1.12) : 1.0
+    const outlays = s.base_spending * stateBaseGrowth * covidFactor
     const perCapita = outlays / s.population
     return {
       code: s.code,
