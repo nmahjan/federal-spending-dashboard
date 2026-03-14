@@ -98,14 +98,15 @@ function generateDataForYear(year) {
     // Year-specific policy adjustments
     const yearAdj = YEAR_ADJUSTMENTS[year]?.[a.code] || 1.0
     
-    const outlays = a.base_outlay * growth * covidMultiplier * yearAdj
+    // Round to nearest million for consistent display & calculation
+    const outlays = Math.round(a.base_outlay * growth * covidMultiplier * yearAdj / 1e6) * 1e6
     
-    // Calculate previous year for YoY
+    // Calculate previous year for YoY (using same rounding)
     const prevYearsFromBase = year - 1 - 2019
     const prevGrowth = Math.pow(1 + a.annual_growth, prevYearsFromBase)
     const prevCovidMultiplier = (year - 1 === 2020 || year - 1 === 2021) ? a.covid_boost : 1.0
     const prevYearAdj = YEAR_ADJUSTMENTS[year - 1]?.[a.code] || 1.0
-    const prevOutlays = a.base_outlay * prevGrowth * prevCovidMultiplier * prevYearAdj
+    const prevOutlays = Math.round(a.base_outlay * prevGrowth * prevCovidMultiplier * prevYearAdj / 1e6) * 1e6
     
     const yoy_change = year > 2019 ? (outlays - prevOutlays) / prevOutlays : 0
     
