@@ -7,6 +7,72 @@ import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
 
+// ============================================
+// DYNAMIC FISCAL YEAR DETECTION
+// Federal Fiscal Year runs October 1 → September 30
+// ============================================
+
+/**
+ * Get the current federal fiscal year based on today's date
+ * FY starts Oct 1 of previous calendar year
+ * Example: March 2026 → FY2026 (started Oct 2025)
+ */
+function getCurrentFiscalYear() {
+  const now = new Date()
+  const month = now.getMonth() // 0-indexed (0 = Jan, 9 = Oct)
+  const year = now.getFullYear()
+  
+  // If Oct-Dec, we're in next year's FY
+  // If Jan-Sep, we're in current year's FY
+  return month >= 9 ? year + 1 : year
+}
+
+/**
+ * Get the last COMPLETED fiscal year (data should be final)
+ * Current FY is still in progress, so previous FY is "last complete"
+ */
+function getLastCompleteFiscalYear() {
+  return getCurrentFiscalYear() - 1
+}
+
+/**
+ * Generate list of years for the dashboard
+ * - Historical: FY2019 through last complete FY
+ * - Projected: Current FY + 3 years ahead
+ */
+function getYearConfig() {
+  const currentFY = getCurrentFiscalYear()
+  const lastCompleteFY = getLastCompleteFiscalYear()
+  
+  // Historical years: 2019 through last complete FY
+  const historicalYears = []
+  for (let y = lastCompleteFY; y >= 2019; y--) {
+    historicalYears.push(y)
+  }
+  
+  // Projected years: current FY + 3 years ahead
+  const projectedYears = []
+  for (let y = currentFY + 3; y >= currentFY; y--) {
+    projectedYears.push(y)
+  }
+  
+  return {
+    currentFY,
+    lastCompleteFY,
+    historicalYears,
+    projectedYears,
+    // All years for trend charts (historical + projected, sorted ascending)
+    allYears: [...historicalYears].reverse().concat([...projectedYears].reverse().filter(y => y > lastCompleteFY))
+  }
+}
+
+// Get year configuration (computed once at module load)
+const YEAR_CONFIG = getYearConfig()
+
+// ============================================
+// EMBEDDED SAMPLE DATA
+// ============================================
+
 // Embedded sample data for GitHub Pages (no backend required)
 // Each agency has unique growth patterns and COVID impacts
 const SAMPLE_AGENCIES = [
@@ -23,6 +89,7 @@ const SAMPLE_AGENCIES = [
 ]
 
 // Year-specific adjustments for certain agencies (e.g., stimulus, infrastructure bills)
+// FY2026-2028: Post-DOGE projections assume return to normal growth patterns
 const YEAR_ADJUSTMENTS = {
   2020: { '020': 1.5, '091': 1.2 },  // Treasury stimulus, Education relief
   2021: { '020': 1.4, '091': 1.3, '069': 1.1 },  // More stimulus, education, infrastructure
@@ -30,6 +97,10 @@ const YEAR_ADJUSTMENTS = {
   2023: { '069': 1.3, '097': 1.05 },  // Infrastructure continues, defense boost
   2024: { '069': 1.2, '075': 1.05 },  // Infrastructure, healthcare expansion
   2025: { '097': 1.08, '024': 1.1 },  // Defense & security increases
+  // PROJECTIONS (2026-2028)
+  2026: { '097': 1.05, '075': 1.02 },  // Defense stable, healthcare growth
+  2027: { '097': 1.03, '069': 1.05 },  // Defense/infrastructure
+  2028: { '097': 1.02, '075': 1.03 },  // Normalized growth
 }
 
 // Federal Revenue Sources (FY2019 baseline = $3.46T total)
@@ -101,6 +172,10 @@ const REVENUE_YEAR_ADJUSTMENTS = {
   2023: { corporate: 0.95 },              // Normalization
   2024: { individual: 1.02 },             // Steady
   2025: { individual: 1.03, corporate: 1.05 }, // Projected growth
+  // PROJECTIONS (2026-2028)
+  2026: { individual: 1.03, corporate: 1.03 }, // Steady economic growth
+  2027: { individual: 1.02, corporate: 1.02 }, // Normalized
+  2028: { individual: 1.02, corporate: 1.02 }, // Continued stability
 }
 
 // Budget Categories - How Congress views spending
@@ -177,10 +252,15 @@ const CATEGORY_YEAR_ADJUSTMENTS = {
   2023: { defense: 1.08, net_interest: 1.35 },     // Defense boost, higher rates
   2024: { net_interest: 1.25 },                    // Continued rate pressure
   2025: { defense: 1.05, net_interest: 1.15 },     // Projected
+  // PROJECTIONS (2026-2028): Interest becomes major burden
+  2026: { net_interest: 1.18, defense: 1.02 },     // Interest keeps growing
+  2027: { net_interest: 1.15, social_security: 1.02 },  // Mandatory + interest
+  2028: { net_interest: 1.12, medicare: 1.02 },    // Healthcare cost pressure
 }
 
 // National Debt Data - Tracks total debt, GDP, and debt-to-GDP ratio
 // FY2019 baseline: $22.7T total debt, $21.4T GDP = 106% debt-to-GDP
+// FY2026-2028: Projections based on CBO estimates and post-DOGE normalization
 const DEBT_DATA = {
   2019: { totalDebt: 22.7e12, publicDebt: 16.8e12, gdp: 21.4e12 },
   2020: { totalDebt: 27.7e12, publicDebt: 21.0e12, gdp: 21.0e12 },  // COVID spike
@@ -188,13 +268,50 @@ const DEBT_DATA = {
   2022: { totalDebt: 31.4e12, publicDebt: 24.3e12, gdp: 25.5e12 },  // Continued growth
   2023: { totalDebt: 33.2e12, publicDebt: 26.2e12, gdp: 27.4e12 },  // Debt ceiling drama
   2024: { totalDebt: 35.0e12, publicDebt: 27.8e12, gdp: 28.8e12 },  // Continued rise
-  2025: { totalDebt: 36.8e12, publicDebt: 29.3e12, gdp: 30.0e12 },  // Projected
+  2025: { totalDebt: 36.8e12, publicDebt: 29.3e12, gdp: 30.0e12 },  // DOGE year
+  // PROJECTIONS (2026-2028): Post-DOGE normalization
+  2026: { totalDebt: 38.5e12, publicDebt: 30.8e12, gdp: 31.2e12, isProjection: true },  // Modest growth resumes
+  2027: { totalDebt: 40.3e12, publicDebt: 32.4e12, gdp: 32.5e12, isProjection: true },  // Continued trajectory
+  2028: { totalDebt: 42.2e12, publicDebt: 34.0e12, gdp: 33.8e12, isProjection: true },  // Debt continues rising
 }
 
 // Generate debt metrics for a given year
+// Dynamically extrapolates for years beyond hardcoded data
 function generateDebtDataForYear(year, revenueTotal, interestPayment) {
-  const d = DEBT_DATA[year] || DEBT_DATA[2025]
-  const prevD = DEBT_DATA[year - 1] || DEBT_DATA[2019]
+  // Get debt data, extrapolating if needed
+  let d
+  if (DEBT_DATA[year]) {
+    d = DEBT_DATA[year]
+  } else {
+    // Extrapolate from last known year (2028) using ~5% debt growth, 4% GDP growth
+    const lastKnownYear = 2028
+    const lastData = DEBT_DATA[lastKnownYear]
+    const yearsAhead = year - lastKnownYear
+    const debtGrowth = Math.pow(1.05, yearsAhead)  // ~5% annual debt growth
+    const gdpGrowth = Math.pow(1.04, yearsAhead)   // ~4% GDP growth
+    d = {
+      totalDebt: lastData.totalDebt * debtGrowth,
+      publicDebt: lastData.publicDebt * debtGrowth,
+      gdp: lastData.gdp * gdpGrowth,
+      isProjection: true
+    }
+  }
+  
+  // Get previous year data for YoY calculation
+  let prevD
+  if (DEBT_DATA[year - 1]) {
+    prevD = DEBT_DATA[year - 1]
+  } else if (year > 2028) {
+    const yearsFromBase = year - 1 - 2028
+    const lastData = DEBT_DATA[2028]
+    prevD = {
+      totalDebt: lastData.totalDebt * Math.pow(1.05, yearsFromBase),
+      publicDebt: lastData.publicDebt * Math.pow(1.05, yearsFromBase),
+      gdp: lastData.gdp * Math.pow(1.04, yearsFromBase)
+    }
+  } else {
+    prevD = DEBT_DATA[2019]
+  }
   
   const debtToGdp = (d.totalDebt / d.gdp) * 100
   const publicDebtToGdp = (d.publicDebt / d.gdp) * 100
@@ -241,6 +358,7 @@ const WORKFORCE_AGENCIES = [
 
 // Year-specific workforce adjustments
 // FY2025: Major DOGE-driven reductions - ~350K total cut through buyouts, RIFs, and attrition
+// FY2026-2028: DOGE concluded, slow recovery via targeted hiring (not full restoration)
 const WORKFORCE_YEAR_ADJUSTMENTS = {
   2020: {}, // COVID - handled by covid_change factor
   2021: {},
@@ -258,11 +376,49 @@ const WORKFORCE_YEAR_ADJUSTMENTS = {
     DOI: 0.82,     // -18% (~12K cut) - Land management reduced
     SSA: 0.85,     // -15% (~9K cut) - Automation + RIFs
     OTHER: 0.75,   // -25% (~52K cut) - USAID, EPA, Education, CFPB gutted
+  },
+  // PROJECTIONS: Post-DOGE stabilization (DOGE ended, slow recovery)
+  2026: {   // Hiring freeze lifted, modest recovery ~3-5%
+    DOD: 0.85,     // +3% from 2025 (critical positions)
+    VA: 0.95,      // +3% (healthcare demand)
+    DHS: 0.91,     // +3% (border/security needs)
+    DOJ: 0.93,     // +3%
+    TRES: 0.78,    // +3% (tax processing needs)
+    USDA: 0.82,    // +2%
+    HHS: 0.81,     // +3% (public health)
+    DOI: 0.84,     // +2%
+    SSA: 0.87,     // +2%
+    OTHER: 0.78,   // +3%
+  },
+  2027: {   // Continued slow recovery ~2-3%
+    DOD: 0.87,
+    VA: 0.97,
+    DHS: 0.93,
+    DOJ: 0.95,
+    TRES: 0.80,
+    USDA: 0.84,
+    HHS: 0.84,
+    DOI: 0.86,
+    SSA: 0.89,
+    OTHER: 0.80,
+  },
+  2028: {   // Stabilization ~1-2% (new normal)
+    DOD: 0.89,
+    VA: 0.99,
+    DHS: 0.95,
+    DOJ: 0.97,
+    TRES: 0.82,
+    USDA: 0.85,
+    HHS: 0.86,
+    DOI: 0.87,
+    SSA: 0.90,
+    OTHER: 0.82,
   }
 }
 
 // Contractor spending data (complements federal workforce)
 // FY2025: Despite workforce cuts, contractor spending stayed high as agencies outsourced
+// FY2026-2028: Projections - contractor spending stabilizes as workforce slowly recovers
 const CONTRACTOR_DATA = {
   2019: { spending: 560e9, estimated_fte: 4200000 },  // Estimated full-time equivalent contractors
   2020: { spending: 610e9, estimated_fte: 4400000 },  // COVID surge
@@ -271,6 +427,10 @@ const CONTRACTOR_DATA = {
   2023: { spending: 710e9, estimated_fte: 4700000 },
   2024: { spending: 740e9, estimated_fte: 4800000 },
   2025: { spending: 720e9, estimated_fte: 4600000 },  // Slight decrease - some contracts canceled by DOGE
+  // PROJECTIONS (2026-2028)
+  2026: { spending: 735e9, estimated_fte: 4650000, isProjection: true },  // Slight increase, agencies still rely on contractors
+  2027: { spending: 750e9, estimated_fte: 4700000, isProjection: true },  // Continued modest growth
+  2028: { spending: 765e9, estimated_fte: 4750000, isProjection: true },  // Stabilization at new normal
 }
 
 // Top Federal Contractors (FY2019 baseline)
@@ -319,6 +479,10 @@ const COMPETITION_DATA = {
   2023: { competed: 63, sole_source: 27, other: 10 },
   2024: { competed: 65, sole_source: 25, other: 10 },
   2025: { competed: 66, sole_source: 24, other: 10 },
+  // PROJECTIONS (2026-2028)
+  2026: { competed: 67, sole_source: 23, other: 10, isProjection: true },
+  2027: { competed: 68, sole_source: 22, other: 10, isProjection: true },
+  2028: { competed: 68, sole_source: 22, other: 10, isProjection: true },
 }
 
 // Generate contracts & grants data for a given year
@@ -367,8 +531,8 @@ function generateContractsDataForYear(year) {
   const totalGrants = grants.reduce((sum, g) => sum + g.amount, 0)
   grants.forEach(g => { g.percent = (g.amount / totalGrants) * 100 })
   
-  // Competition data
-  const competition = COMPETITION_DATA[year] || COMPETITION_DATA[2025]
+  // Competition data - use last available year if not found
+  const competition = COMPETITION_DATA[year] || COMPETITION_DATA[2028] || { competed: 68, sole_source: 22, other: 10, isProjection: true }
   
   return {
     contractors,
@@ -427,8 +591,22 @@ function generateWorkforceDataForYear(year) {
   const totalCompensation = agencies.reduce((sum, a) => sum + a.total_compensation, 0)
   agencies.forEach(a => { a.percent_of_total = (a.employees / totalEmployees) * 100 })
   
-  // Contractor data for comparison
-  const contractors = CONTRACTOR_DATA[year] || CONTRACTOR_DATA[2025]
+  // Contractor data for comparison - extrapolates if year not found
+  let contractors
+  if (CONTRACTOR_DATA[year]) {
+    contractors = CONTRACTOR_DATA[year]
+  } else {
+    // Extrapolate from 2028 using ~2% annual growth
+    const lastYear = 2028
+    const lastData = CONTRACTOR_DATA[lastYear]
+    const yearsAhead = year - lastYear
+    const growth = Math.pow(1.02, yearsAhead)
+    contractors = {
+      spending: lastData.spending * growth,
+      estimated_fte: Math.round(lastData.estimated_fte * growth),
+      isProjection: true
+    }
+  }
   
   return {
     agencies,
@@ -1170,8 +1348,204 @@ function StateTable({ states }) {
   )
 }
 
+// Projection Badge Component
+function ProjectionBadge() {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 ml-2">
+      Projected
+    </span>
+  )
+}
+
+// Chatbot Component - Keyword-based Q&A for dashboard data
+function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contractsData, selectedYear }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [messages, setMessages] = useState([
+    { role: 'bot', text: "Hi! I can answer questions about federal spending data. Try asking about spending, revenue, debt, workforce, or agencies!" }
+  ])
+  const [input, setInput] = useState('')
+
+  // Knowledge base - keywords mapped to responses
+  const getResponse = (question) => {
+    const q = question.toLowerCase()
+    const isProjection = selectedYear >= YEAR_CONFIG.currentFY
+    const yearNote = isProjection ? (selectedYear === YEAR_CONFIG.currentFY ? ' (current FY)' : ' (projected)') : ''
+    
+    // Total spending questions
+    if (q.includes('total spending') || q.includes('how much') && q.includes('spend') || q.includes('total outlay')) {
+      return `In FY${selectedYear}${yearNote}, total federal spending is ${formatCurrencyStatic(data.totalAgency)}. The top agency is ${data.agencies[0]?.name} at ${data.agencies[0]?.outlays_formatted}.`
+    }
+    
+    // Revenue questions
+    if (q.includes('revenue') || q.includes('income') || q.includes('tax')) {
+      const topSource = revenueData.revenues[0]
+      return `Federal revenue in FY${selectedYear}${yearNote} is ${formatCurrencyStatic(revenueData.totalRevenue)}. The largest source is ${topSource?.name} at ${topSource?.amount_formatted} (${topSource?.percent_of_total.toFixed(1)}% of total).`
+    }
+    
+    // Deficit questions
+    if (q.includes('deficit') || q.includes('budget gap') || q.includes('shortfall')) {
+      const deficit = data.totalAgency - revenueData.totalRevenue
+      return `The FY${selectedYear}${yearNote} budget deficit is ${formatCurrencyStatic(Math.abs(deficit))}. That's spending (${formatCurrencyStatic(data.totalAgency)}) minus revenue (${formatCurrencyStatic(revenueData.totalRevenue)}).`
+    }
+    
+    // Debt questions
+    if (q.includes('debt') || q.includes('national debt') || q.includes('owe')) {
+      return `The national debt in FY${selectedYear}${yearNote} is ${debtData.totalDebt_formatted}. That's ${debtData.debtToGdp.toFixed(1)}% of GDP (${debtData.gdp_formatted}). Debt per citizen is ${debtData.debtPerCapita_formatted}.`
+    }
+    
+    // Interest questions
+    if (q.includes('interest') || q.includes('debt payment')) {
+      return `Interest payments on the national debt in FY${selectedYear}${yearNote} are ${debtData.interestPayment_formatted}. That's ${debtData.interestToRevenue.toFixed(1)}% of federal revenue - a growing concern.`
+    }
+    
+    // Workforce questions
+    if (q.includes('workforce') || q.includes('employee') || q.includes('federal worker') || q.includes('doge')) {
+      const dogeNote = selectedYear === 2025 ? ' (DOGE cuts reduced workforce by ~350K)' : selectedYear > 2025 ? ' (post-DOGE recovery)' : ''
+      return `Federal civilian workforce in FY${selectedYear}${yearNote}: ${workforceData.totalEmployees_formatted} employees${dogeNote}. Total personnel cost: ${workforceData.totalCompensation_formatted}. Average salary: $${workforceData.avgSalaryAll.toLocaleString()}.`
+    }
+    
+    // Contractor questions  
+    if (q.includes('contractor') || q.includes('contract spending') || q.includes('outsourc')) {
+      return `Federal contractor spending in FY${selectedYear}${yearNote}: ${workforceData.contractorSpending_formatted}. Estimated contractor FTEs: ${workforceData.contractorFTE_formatted}. Top contractor is ${contractsData.contractors[0]?.name} at ${contractsData.contractors[0]?.amount_formatted}.`
+    }
+    
+    // Agency questions
+    if (q.includes('agency') || q.includes('department') || q.includes('biggest spender') || q.includes('top agency')) {
+      const top3 = data.agencies.slice(0, 3).map((a, i) => `${i + 1}. ${a.name.replace('Department of ', '')}: ${a.outlays_formatted}`).join(', ')
+      return `Top spending agencies in FY${selectedYear}${yearNote}: ${top3}. These agencies account for ${data.agencies.slice(0, 3).reduce((sum, a) => sum + a.percent_of_total, 0).toFixed(0)}% of total federal spending.`
+    }
+    
+    // Social Security questions
+    if (q.includes('social security')) {
+      const ss = budgetData.categories.find(c => c.code === 'social_security')
+      return `Social Security spending in FY${selectedYear}${yearNote}: ${ss?.amount_formatted} (${ss?.percent_of_total.toFixed(1)}% of total budget). It's the largest mandatory program and grows automatically based on beneficiary count and COLA adjustments.`
+    }
+    
+    // Medicare/Medicaid questions
+    if (q.includes('medicare') || q.includes('medicaid') || q.includes('healthcare')) {
+      const medicare = budgetData.categories.find(c => c.code === 'medicare')
+      const medicaid = budgetData.categories.find(c => c.code === 'medicaid')
+      return `Healthcare spending in FY${selectedYear}${yearNote}: Medicare is ${medicare?.amount_formatted}, Medicaid is ${medicaid?.amount_formatted}. Combined they're ${((medicare?.percent_of_total || 0) + (medicaid?.percent_of_total || 0)).toFixed(0)}% of the budget.`
+    }
+    
+    // Defense questions
+    if (q.includes('defense') || q.includes('military') || q.includes('pentagon')) {
+      const defense = budgetData.categories.find(c => c.code === 'defense')
+      return `Defense spending in FY${selectedYear}${yearNote}: ${defense?.amount_formatted} (${defense?.percent_of_total.toFixed(1)}% of total). It's the largest discretionary category and requires annual congressional appropriation.`
+    }
+    
+    // Mandatory vs Discretionary
+    if (q.includes('mandatory') || q.includes('discretionary') || q.includes('budget breakdown')) {
+      return `FY${selectedYear}${yearNote} budget breakdown: Mandatory spending is ${formatCurrencyStatic(budgetData.totals.mandatory)} (${((budgetData.totals.mandatory / budgetData.totalSpending) * 100).toFixed(0)}%), Discretionary is ${formatCurrencyStatic(budgetData.totals.discretionary)} (${((budgetData.totals.discretionary / budgetData.totalSpending) * 100).toFixed(0)}%), Interest is ${formatCurrencyStatic(budgetData.totals.interest)} (${((budgetData.totals.interest / budgetData.totalSpending) * 100).toFixed(0)}%).`
+    }
+    
+    // Grants questions
+    if (q.includes('grant')) {
+      return `Federal grants in FY${selectedYear}${yearNote}: ${contractsData.totalGrants_formatted}. The largest category is ${contractsData.grants[0]?.name} at ${contractsData.grants[0]?.amount_formatted}. Grants go to states, nonprofits, and research institutions.`
+    }
+    
+    // Projection methodology
+    if (q.includes('projection') || q.includes('forecast') || q.includes('predict')) {
+      return `FY2026-2028 projections use: historical growth rates, CBO debt estimates, and post-DOGE workforce recovery assumptions. DOGE ended in 2025, so 2026+ assumes gradual hiring resumption (~2-3% annual recovery). Mandatory spending continues automatic growth. Debt projections follow current deficit trajectory.`
+    }
+    
+    // Year comparison
+    if (q.includes('compare') || q.includes('change') || q.includes('vs') || q.includes('growth')) {
+      const spendingChange = ((data.totalAgency / generateDataForYear(2019).totalAgency) - 1) * 100
+      const debtChange = ((debtData.totalDebt / 22.7e12) - 1) * 100
+      return `Since FY2019: Total spending is up ${spendingChange.toFixed(0)}%. National debt is up ${debtChange.toFixed(0)}%. Major drivers were COVID relief (2020-2021) and continued mandatory spending growth.`
+    }
+    
+    // Default response
+    return `I can answer questions about:\n• Total spending & deficit\n• Revenue & taxes\n• National debt & interest\n• Workforce & DOGE cuts\n• Contractors & grants\n• Agencies & departments\n• Medicare, Medicaid, Social Security\n• Defense spending\n• Projections (2026-2028)\n\nTry asking something specific!`
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!input.trim()) return
+    
+    const userMessage = { role: 'user', text: input }
+    const botResponse = { role: 'bot', text: getResponse(input) }
+    
+    setMessages(prev => [...prev, userMessage, botResponse])
+    setInput('')
+  }
+
+  return (
+    <>
+      {/* Chat toggle button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 bg-blue-600 text-white p-3 sm:p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
+        aria-label="Open chat"
+      >
+        {isOpen ? (
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Chat window */}
+      {isOpen && (
+        <div className="fixed bottom-16 sm:bottom-20 right-4 sm:right-6 z-50 w-[calc(100%-2rem)] sm:w-96 max-w-md bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col max-h-[70vh] sm:max-h-[500px]">
+          {/* Header */}
+          <div className="bg-blue-600 text-white px-4 py-3 rounded-t-xl flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-sm sm:text-base">Budget Assistant</h3>
+              <p className="text-xs text-blue-100">Ask about federal spending data</p>
+            </div>
+            <span className="text-xs bg-blue-500 px-2 py-0.5 rounded">FY{selectedYear}</span>
+          </div>
+          
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] px-3 py-2 rounded-lg text-sm ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-600 text-white rounded-br-none' 
+                    : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                }`}>
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Input */}
+          <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about spending, debt, etc..."
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  )
+}
+
 function App() {
-  const [selectedYear, setSelectedYear] = useState(2025)
+  // Default to last complete FY (most recent with "final" data)
+  const [selectedYear, setSelectedYear] = useState(YEAR_CONFIG.lastCompleteFY)
   const [activeTab, setActiveTab] = useState('overview')
 
   // Generate spending data for selected year
@@ -1187,29 +1561,32 @@ function App() {
   const deficit = data.totalAgency - revenueData.totalRevenue
   
   // Generate trend data for all years (including revenue for comparison)
+  // Uses dynamic year range from YEAR_CONFIG
   const trend = useMemo(() => ({
-    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+    years: YEAR_CONFIG.allYears.map(year => {
       const yearData = generateDataForYear(year)
       const yearRevenue = generateRevenueForYear(year)
       return { 
         fiscal_year: year, 
         total_outlays: yearData.totalAgency,
         total_revenue: yearRevenue.totalRevenue,
-        deficit: yearData.totalAgency - yearRevenue.totalRevenue
+        deficit: yearData.totalAgency - yearRevenue.totalRevenue,
+        isProjection: year >= YEAR_CONFIG.currentFY
       }
     })
   }), [])
 
   // Generate budget category trend data
   const categoryTrend = useMemo(() => ({
-    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+    years: YEAR_CONFIG.allYears.map(year => {
       const yearBudget = generateBudgetCategoriesForYear(year)
       return { 
         fiscal_year: year, 
         mandatory: yearBudget.totals.mandatory,
         discretionary: yearBudget.totals.discretionary,
         interest: yearBudget.totals.interest,
-        total: yearBudget.totalSpending
+        total: yearBudget.totalSpending,
+        isProjection: year >= YEAR_CONFIG.currentFY
       }
     })
   }), [])
@@ -1223,7 +1600,7 @@ function App() {
   
   // Generate debt trend data
   const debtTrend = useMemo(() => ({
-    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+    years: YEAR_CONFIG.allYears.map(year => {
       const yearRevenue = generateRevenueForYear(year)
       const yearBudget = generateBudgetCategoriesForYear(year)
       const yearDebt = generateDebtDataForYear(year, yearRevenue.totalRevenue, yearBudget.totals.interest)
@@ -1232,7 +1609,8 @@ function App() {
         totalDebt: yearDebt.totalDebt,
         gdp: yearDebt.gdp,
         debtToGdp: yearDebt.debtToGdp,
-        threshold: 100  // 100% debt-to-GDP reference line
+        threshold: 100,  // 100% debt-to-GDP reference line
+        isProjection: year >= YEAR_CONFIG.currentFY
       }
     })
   }), [])
@@ -1242,13 +1620,14 @@ function App() {
   
   // Generate workforce trend data
   const workforceTrend = useMemo(() => ({
-    years: [2019, 2020, 2021, 2022, 2023, 2024, 2025].map(year => {
+    years: YEAR_CONFIG.allYears.map(year => {
       const yearWorkforce = generateWorkforceDataForYear(year)
       return { 
         fiscal_year: year, 
         federal: yearWorkforce.totalEmployees,
         contractors: yearWorkforce.contractorFTE,
-        compensation: yearWorkforce.totalCompensation
+        compensation: yearWorkforce.totalCompensation,
+        isProjection: year >= YEAR_CONFIG.currentFY
       }
     })
   }), [])
@@ -1309,8 +1688,29 @@ function App() {
     fiscal_year: selectedYear
   }
 
+  // Check if viewing a projected year (any year >= current FY is a projection)
+  const isProjection = selectedYear >= YEAR_CONFIG.currentFY
+  const isCurrentFY = selectedYear === YEAR_CONFIG.currentFY
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Projection Banner */}
+      {isProjection && (
+        <div className={`${isCurrentFY ? 'bg-blue-500' : 'bg-amber-500'} text-white py-2`}>
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-center gap-2">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs sm:text-sm font-medium">
+              {isCurrentFY 
+                ? `FY${selectedYear} is the current fiscal year (in progress). Data uses estimates until year-end.`
+                : `FY${selectedYear} is a projection based on historical trends and CBO estimates.`
+              }
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Project Header */}
       <div className="bg-blue-900 text-white py-2 sm:py-3">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -1332,9 +1732,16 @@ function App() {
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
                 className="border border-gray-300 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 text-sm"
               >
-                {[2025, 2024, 2023, 2022, 2021, 2020, 2019].map(y => (
-                  <option key={y} value={y}>FY {y}</option>
-                ))}
+                <optgroup label={`Projections (FY${YEAR_CONFIG.currentFY}+)`}>
+                  {YEAR_CONFIG.projectedYears.map(y => (
+                    <option key={y} value={y}>FY {y} {y === YEAR_CONFIG.currentFY ? '(Current)' : '(Projected)'}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Historical (Complete)">
+                  {YEAR_CONFIG.historicalYears.map(y => (
+                    <option key={y} value={y}>FY {y}</option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           </div>
@@ -1943,12 +2350,26 @@ function App() {
       </main>
 
       <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6 lg:px-8 space-y-1">
           <p className="text-xs sm:text-sm text-gray-500 text-center">
             Data sourced from USAspending.gov | Built for transparency
           </p>
+          <p className="text-[10px] sm:text-xs text-gray-400 text-center">
+            Historical data through FY{YEAR_CONFIG.lastCompleteFY} | FY{YEAR_CONFIG.currentFY}+ are projections based on growth models
+          </p>
         </div>
       </footer>
+
+      {/* Chatbot */}
+      <ChatBot 
+        data={data}
+        revenueData={revenueData}
+        budgetData={budgetData}
+        debtData={debtData}
+        workforceData={workforceData}
+        contractsData={contractsData}
+        selectedYear={selectedYear}
+      />
     </div>
   )
 }
