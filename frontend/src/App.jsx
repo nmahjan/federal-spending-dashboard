@@ -86,7 +86,7 @@ const SAMPLE_AGENCIES = [
   { code: '075', name: 'Department of Health and Human Services', base_oblig: 1800e9, base_outlay: 1750e9, base_budget: 1900e9, annual_growth: 0.045, covid_boost: 1.35 },
   { code: '028', name: 'Social Security Administration', base_oblig: 1400e9, base_outlay: 1350e9, base_budget: 1450e9, annual_growth: 0.025, covid_boost: 1.08 },
   { code: '097', name: 'Department of Defense', base_oblig: 850e9, base_outlay: 820e9, base_budget: 900e9, annual_growth: 0.02, covid_boost: 1.02 },
-  { code: '020', name: 'Department of the Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9, annual_growth: 0.015, covid_boost: 1.85 },
+  { code: '020', name: 'Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9, annual_growth: 0.015, covid_boost: 1.85 },
   { code: '036', name: 'Department of Veterans Affairs', base_oblig: 320e9, base_outlay: 310e9, base_budget: 340e9, annual_growth: 0.04, covid_boost: 1.12 },
   { code: '012', name: 'Department of Agriculture', base_oblig: 220e9, base_outlay: 210e9, base_budget: 240e9, annual_growth: 0.02, covid_boost: 1.25 },
   { code: '091', name: 'Department of Education', base_oblig: 180e9, base_outlay: 175e9, base_budget: 200e9, annual_growth: 0.01, covid_boost: 1.45 },
