@@ -5,7 +5,14 @@ import {
 } from 'recharts'
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 
+// Import JSON data (updated monthly by GitHub Actions)
+import spendingData from './data/spending.json'
+
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
+
+// Data source metadata
+const DATA_LAST_UPDATED = spendingData?.metadata?.last_updated || null
+const DATA_SOURCES = spendingData?.metadata?.sources || ['USAspending.gov', 'Treasury Fiscal Data API']
 
 // ============================================
 // DYNAMIC FISCAL YEAR DETECTION
@@ -1723,7 +1730,14 @@ function App() {
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Federal Spending Dashboard</h1>
-              <p className="text-xs sm:text-sm text-gray-500">Tracking $6+ trillion in annual federal spending</p>
+              <p className="text-xs sm:text-sm text-gray-500">
+                Tracking $6+ trillion in annual federal spending
+                {DATA_LAST_UPDATED && (
+                  <span className="ml-2 text-gray-400">
+                    | Updated: {new Date(DATA_LAST_UPDATED).toLocaleDateString()}
+                  </span>
+                )}
+              </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
               <label className="text-xs sm:text-sm text-gray-600">Fiscal Year:</label>
