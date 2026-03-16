@@ -86,7 +86,7 @@ const SAMPLE_AGENCIES = [
   { code: '075', name: 'Department of Health and Human Services', base_oblig: 1800e9, base_outlay: 1750e9, base_budget: 1900e9, annual_growth: 0.045, covid_boost: 1.35 },
   { code: '028', name: 'Social Security Administration', base_oblig: 1400e9, base_outlay: 1350e9, base_budget: 1450e9, annual_growth: 0.025, covid_boost: 1.08 },
   { code: '097', name: 'Department of Defense', base_oblig: 850e9, base_outlay: 820e9, base_budget: 900e9, annual_growth: 0.02, covid_boost: 1.02 },
-  { code: '020', name: 'Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9, annual_growth: 0.015, covid_boost: 1.85 },
+  { code: '020', name: 'Department of Treasury', base_oblig: 650e9, base_outlay: 630e9, base_budget: 700e9, annual_growth: 0.015, covid_boost: 1.85 },
   { code: '036', name: 'Department of Veterans Affairs', base_oblig: 320e9, base_outlay: 310e9, base_budget: 340e9, annual_growth: 0.04, covid_boost: 1.12 },
   { code: '012', name: 'Department of Agriculture', base_oblig: 220e9, base_outlay: 210e9, base_budget: 240e9, annual_growth: 0.02, covid_boost: 1.25 },
   { code: '091', name: 'Department of Education', base_oblig: 180e9, base_outlay: 175e9, base_budget: 200e9, annual_growth: 0.01, covid_boost: 1.45 },
@@ -1418,7 +1418,7 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
     
     // Agency questions
     if (q.includes('agency') || q.includes('department') || q.includes('biggest spender') || q.includes('top agency')) {
-      const top3 = data.agencies.slice(0, 3).map((a, i) => `${i + 1}. ${a.name.replace('Department of ', '')}: ${a.outlays_formatted}`).join(', ')
+      const top3 = data.agencies.slice(0, 3).map((a, i) => `${i + 1}. ${a.name.replace('Department of ', '').replace('the ', '')}: ${a.outlays_formatted}`).join(', ')
       return `Top spending agencies in FY${selectedYear}${yearNote}: ${top3}. These agencies account for ${data.agencies.slice(0, 3).reduce((sum, a) => sum + a.percent_of_total, 0).toFixed(0)}% of total federal spending.`
     }
     
@@ -2165,7 +2165,7 @@ function App() {
                   <tbody className="divide-y divide-gray-200">
                     {workforce.agencies.map((agency, idx) => (
                       <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').substring(0, 15)}{agency.name.replace('Department of ', '').length > 15 ? '...' : ''}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 15)}{agency.name.replace('Department of ', '').replace('the ', '').length > 15 ? '...' : ''}</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{agency.employees_formatted}</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm hidden sm:table-cell">{agency.avg_salary_formatted}</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm hidden md:table-cell">{agency.total_compensation_formatted}</td>
@@ -2331,7 +2331,7 @@ function App() {
                   {agencies.agencies.map((agency, idx) => (
                     <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-3 sm:px-6 py-3 sm:py-4">
-                        <span className="font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').substring(0, 20)}{agency.name.replace('Department of ', '').length > 20 ? '...' : ''}</span>
+                        <span className="font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 20)}{agency.name.replace('Department of ', '').replace('the ', '').length > 20 ? '...' : ''}</span>
                       </td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{agency.outlays_formatted}</td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 text-xs sm:text-sm hidden sm:table-cell">{agency.percent_of_total.toFixed(1)}%</td>
