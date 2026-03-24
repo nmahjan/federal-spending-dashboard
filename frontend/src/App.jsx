@@ -25,6 +25,7 @@ const DATA_SOURCES = spendingData?.metadata?.sources || ['USAspending.gov', 'Tre
  * Example: March 2026 → FY2026 (started Oct 2025)
  */
 function getCurrentFiscalYear() {
+
   const now = new Date()
   const month = now.getMonth() // 0-indexed (0 = Jan, 9 = Oct)
   const year = now.getFullYear()
@@ -527,7 +528,7 @@ function generateContractsDataForYear(year) {
   const grants = GRANT_CATEGORIES.map(g => {
     const growth = Math.pow(1 + g.growth, yearsFromBase)
     const covidFactor = (year === 2020 || year === 2021) ? g.covid_boost : 1.0
-    const amount = Math.round(g.base * growth * covidFactor / 1e6) * 1e6
+    const amount = Math.round((g.base * growth * covidFactor) / 100 / 1e6) * 1e6
     return {
       name: g.name,
       amount,
@@ -854,6 +855,38 @@ function formatCurrencyStatic(value) {
   return `$${value.toLocaleString()}`
 }
 
+// CSV Export utility - converts array of objects to CSV and triggers download
+function downloadCSV(data, filename, columns) {
+  // Build header row
+  const headers = columns.map(col => col.label).join(',')
+  
+  // Build data rows
+  const rows = data.map((row, index) => 
+    columns.map(col => {
+      let value = col.accessor(row, index)
+      // Escape quotes and wrap in quotes if contains comma
+      if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+        value = `"${value.replace(/"/g, '""')}"`
+      }
+      return value
+    }).join(',')
+  ).join('\n')
+  
+  const csv = `${headers}\n${rows}`
+  
+  // Create blob and trigger download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.setAttribute('href', url)
+  link.setAttribute('download', filename)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 // State abbreviation to FIPS code mapping
 const STATE_FIPS = {
   AL: '01', AK: '02', AZ: '04', AR: '05', CA: '06', CO: '08', CT: '09', DE: '10',
@@ -876,15 +909,76 @@ function formatCurrency(value) {
   return `$${value.toLocaleString()}`
 }
 
+// ============================================
+// SKELETON LOADING COMPONENTS
+// ============================================
+
+function Skeleton({ className = '', width, height }) {
+  const style = {}
+  if (width) style.width = width
+  if (height) style.height = height
+  return <div className={`skeleton ${className}`} style={style} />
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+      <Skeleton className="h-4 w-24 mb-2" />
+      <Skeleton className="h-8 w-32 mb-2" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  )
+}
+
+function ChartSkeleton({ height = 300 }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+      <Skeleton className="h-6 w-48 mb-4" />
+      <Skeleton className="w-full rounded-lg" height={height} />
+    </div>
+  )
+}
+
+function TableSkeleton({ rows = 5 }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+      <Skeleton className="h-6 w-48 mb-4" />
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-full" />
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} className="h-12 w-full" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="space-y-4 sm:space-y-8 animate-pulse">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+    </div>
+  )
+}
+
 function StatCard({ title, value, subtitle, change }) {
   const isPositive = change && change >= 0
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-      <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-      {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700 transition-colors duration-200">
+      <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+      <p className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{value}</p>
+      {subtitle && <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
       {change !== undefined && (
-        <p className={`text-sm mt-2 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+        <p className={`text-xs sm:text-sm mt-1 sm:mt-2 ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
           {isPositive ? '↑' : '↓'} {Math.abs(change * 100).toFixed(1)}% vs last year
         </p>
       )}
@@ -1041,7 +1135,7 @@ function CategoryTrendChart({ data }) {
         <XAxis dataKey="fiscal_year" />
         <YAxis tickFormatter={formatCurrency} />
         <Tooltip formatter={(v) => formatCurrency(v)} />
-        <Legend />
+        <Legend formatter={(value) => <span className="text-gray-700 dark:text-gray-200">{value}</span>} />
         <Bar dataKey="mandatory" name="Mandatory" stackId="a" fill={CATEGORY_COLORS.mandatory} />
         <Bar dataKey="discretionary" name="Discretionary" stackId="a" fill={CATEGORY_COLORS.discretionary} />
         <Bar dataKey="interest" name="Net Interest" stackId="a" fill={CATEGORY_COLORS.interest} />
@@ -1061,7 +1155,7 @@ function DebtTrendChart({ data }) {
           formatter={(v, name) => [formatCurrency(v), name]} 
           labelFormatter={(l) => `FY ${l}`} 
         />
-        <Legend />
+        <Legend formatter={(value) => <span className="text-gray-700 dark:text-gray-200">{value}</span>} />
         <Line 
           type="monotone" 
           dataKey="totalDebt" 
@@ -1149,7 +1243,7 @@ function WorkforceTrendChart({ data }) {
           formatter={(v, name) => [v.toLocaleString(), name]} 
           labelFormatter={(l) => `FY ${l}`} 
         />
-        <Legend />
+        <Legend formatter={(value) => <span className="text-gray-700 dark:text-gray-200">{value}</span>} />
         <Line 
           type="monotone" 
           dataKey="federal" 
@@ -1207,7 +1301,7 @@ function ContractCategoryChart({ categories }) {
           paddingAngle={2}
           dataKey="amount"
           nameKey="name"
-          label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }) => `${name.split(' ')[0]} ${((percent > 1 ? percent : percent * 100)).toFixed(0)}%`}
           labelLine={false}
         >
           {categories.map((entry, index) => (
@@ -1235,7 +1329,7 @@ function GrantsCategoryChart({ grants }) {
           paddingAngle={2}
           dataKey="amount"
           nameKey="name"
-          label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }) => `${name.split(' ')[0]} ${((percent > 1 ? percent : percent * 100)).toFixed(0)}%`}
           labelLine={false}
         >
           {grants.map((entry, index) => (
@@ -1294,28 +1388,28 @@ function USMap({ states, onStateHover }) {
       
       {/* Tooltip */}
       {hoveredState && (
-        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white rounded-lg shadow-lg p-3 sm:p-4 border border-gray-200 min-w-[160px] sm:min-w-[200px] z-10">
-          <h4 className="font-bold text-gray-900 text-sm sm:text-lg">{hoveredState.name}</h4>
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 min-w-[160px] sm:min-w-[200px] z-10">
+          <h4 className="font-bold text-gray-900 dark:text-white text-sm sm:text-lg">{hoveredState.name}</h4>
           <div className="mt-1.5 sm:mt-2 space-y-1">
             <div className="flex justify-between gap-2 text-xs sm:text-sm">
-              <span className="text-gray-500">Spending:</span>
-              <span className="font-semibold text-gray-900">{hoveredState.outlays_formatted}</span>
+              <span className="text-gray-500 dark:text-gray-400">Spending:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{hoveredState.outlays_formatted}</span>
             </div>
             <div className="flex justify-between gap-2 text-xs sm:text-sm">
-              <span className="text-gray-500">Per Capita:</span>
-              <span className="font-semibold text-gray-900">{hoveredState.per_capita_formatted}</span>
+              <span className="text-gray-500 dark:text-gray-400">Per Capita:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{hoveredState.per_capita_formatted}</span>
             </div>
             <div className="flex justify-between gap-2 text-xs sm:text-sm">
-              <span className="text-gray-500">% of Total:</span>
-              <span className="font-semibold text-gray-900">{hoveredState.percent_of_total.toFixed(1)}%</span>
+              <span className="text-gray-500 dark:text-gray-400">% of Total:</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{hoveredState.percent_of_total.toFixed(1)}%</span>
             </div>
           </div>
         </div>
       )}
       
       {/* Legend */}
-      <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-white rounded-lg shadow p-2 sm:p-3 border border-gray-200">
-        <p className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Federal Spending</p>
+      <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-white dark:bg-gray-800 rounded-lg shadow p-2 sm:p-3 border border-gray-200 dark:border-gray-700">
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 sm:mb-2">Federal Spending</p>
         <div className="flex items-center gap-1">
           <span className="text-[10px] sm:text-xs text-gray-400">Low</span>
           <div className="w-16 sm:w-24 h-2 sm:h-3 rounded" style={{ background: 'linear-gradient(to right, rgb(200, 230, 255), rgb(55, 55, 255))' }}></div>
@@ -1329,24 +1423,26 @@ function USMap({ states, onStateHover }) {
 function StateTable({ states }) {
   return (
     <div className="overflow-x-auto -mx-4 sm:mx-0">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+        <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
-            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
-            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spending</th>
-            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Per Capita</th>
-            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">% of Total</th>
+            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">State</th>
+            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Spending</th>
+            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Population</th>
+            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Per Capita</th>
+            <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">% of Total</th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-white divide-y divide-gray-200 dark:divide-gray-600">
           {states.map((state, idx) => (
-            <tr key={state.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+            <tr key={state.code} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
               <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                <span className="font-medium text-gray-900 text-xs sm:text-sm">{state.name}</span>
+                <span className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">{state.name}</span>
               </td>
-              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-900 text-xs sm:text-sm">{state.outlays_formatted}</td>
-              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-900 text-xs sm:text-sm hidden sm:table-cell">{state.per_capita_formatted}</td>
-              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-500 text-xs sm:text-sm hidden sm:table-cell">{state.percent_of_total.toFixed(1)}%</td>
+              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-900 dark:text-white text-xs sm:text-sm">{state.outlays_formatted}</td>
+              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-900 dark:text-white text-xs sm:text-sm hidden sm:table-cell">{state.population.toLocaleString()}</td>
+              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-900 dark:text-white text-xs sm:text-sm hidden sm:table-cell">{state.per_capita_formatted}</td>
+              <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs sm:text-sm hidden sm:table-cell">{state.percent_of_total.toFixed(1)}%</td>
             </tr>
           ))}
         </tbody>
@@ -1358,7 +1454,7 @@ function StateTable({ states }) {
 // Projection Badge Component
 function ProjectionBadge() {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 ml-2">
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:text-amber-200 ml-2">
       Projected
     </span>
   )
@@ -1368,87 +1464,112 @@ function ProjectionBadge() {
 function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contractsData, selectedYear }) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState([
-    { role: 'bot', text: "Hi! I can answer questions about federal spending data. Try asking about spending, revenue, debt, workforce, or agencies!" }
+    { role: 'bot', text: "Hi! I can answer questions about federal spending data. Try asking about spending, revenue, debt, workforce, or agencies! You can also mention a specific year (2019-2028)." }
   ])
   const [input, setInput] = useState('')
 
   // Knowledge base - keywords mapped to responses
   const getResponse = (question) => {
     const q = question.toLowerCase()
-    const isProjection = selectedYear >= YEAR_CONFIG.currentFY
-    const yearNote = isProjection ? (selectedYear === YEAR_CONFIG.currentFY ? ' (current FY)' : ' (projected)') : ''
+    
+    // Parse year from question if mentioned (e.g., "2028", "FY2026", "fiscal year 2025")
+    const yearMatch = q.match(/(?:fy\s*)?20(1[9]|2[0-8])\b/)
+    const questionYear = yearMatch ? parseInt('20' + yearMatch[1]) : null
+    
+    // Use question's year if specified, otherwise use selected year
+    const targetYear = questionYear || selectedYear
+    
+    // Generate data for the target year if different from selected
+    let targetData = data
+    let targetRevenue = revenueData
+    let targetBudget = budgetData
+    let targetDebt = debtData
+    let targetWorkforce = workforceData
+    let targetContracts = contractsData
+    
+    if (questionYear && questionYear !== selectedYear) {
+      targetData = generateDataForYear(questionYear)
+      targetRevenue = generateRevenueForYear(questionYear)
+      targetBudget = generateBudgetCategoriesForYear(questionYear)
+      targetWorkforce = generateWorkforceDataForYear(questionYear)
+      targetContracts = generateContractsDataForYear(questionYear)
+      targetDebt = generateDebtDataForYear(questionYear, targetRevenue.totalRevenue, targetBudget.totals.interest)
+    }
+    
+    const isProjection = targetYear >= YEAR_CONFIG.currentFY
+    const yearNote = isProjection ? (targetYear === YEAR_CONFIG.currentFY ? ' (current FY)' : ' (projected)') : ''
     
     // Total spending questions
     if (q.includes('total spending') || q.includes('how much') && q.includes('spend') || q.includes('total outlay')) {
-      return `In FY${selectedYear}${yearNote}, total federal spending is ${formatCurrencyStatic(data.totalAgency)}. The top agency is ${data.agencies[0]?.name} at ${data.agencies[0]?.outlays_formatted}.`
+      return `In FY${targetYear}${yearNote}, total federal spending is ${formatCurrencyStatic(targetData.totalAgency)}. The top agency is ${targetData.agencies[0]?.name} at ${targetData.agencies[0]?.outlays_formatted}.`
     }
     
     // Revenue questions
     if (q.includes('revenue') || q.includes('income') || q.includes('tax')) {
-      const topSource = revenueData.revenues[0]
-      return `Federal revenue in FY${selectedYear}${yearNote} is ${formatCurrencyStatic(revenueData.totalRevenue)}. The largest source is ${topSource?.name} at ${topSource?.amount_formatted} (${topSource?.percent_of_total.toFixed(1)}% of total).`
+      const topSource = targetRevenue.revenues[0]
+      return `Federal revenue in FY${targetYear}${yearNote} is ${formatCurrencyStatic(targetRevenue.totalRevenue)}. The largest source is ${topSource?.name} at ${topSource?.amount_formatted} (${topSource?.percent_of_total.toFixed(1)}% of total).`
     }
     
     // Deficit questions
     if (q.includes('deficit') || q.includes('budget gap') || q.includes('shortfall')) {
-      const deficit = data.totalAgency - revenueData.totalRevenue
-      return `The FY${selectedYear}${yearNote} budget deficit is ${formatCurrencyStatic(Math.abs(deficit))}. That's spending (${formatCurrencyStatic(data.totalAgency)}) minus revenue (${formatCurrencyStatic(revenueData.totalRevenue)}).`
+      const deficit = targetData.totalAgency - targetRevenue.totalRevenue
+      return `The FY${targetYear}${yearNote} budget deficit is ${formatCurrencyStatic(Math.abs(deficit))}. That's spending (${formatCurrencyStatic(targetData.totalAgency)}) minus revenue (${formatCurrencyStatic(targetRevenue.totalRevenue)}).`
     }
     
     // Debt questions
     if (q.includes('debt') || q.includes('national debt') || q.includes('owe')) {
-      return `The national debt in FY${selectedYear}${yearNote} is ${debtData.totalDebt_formatted}. That's ${debtData.debtToGdp.toFixed(1)}% of GDP (${debtData.gdp_formatted}). Debt per citizen is ${debtData.debtPerCapita_formatted}.`
+      return `The national debt in FY${targetYear}${yearNote} is ${targetDebt.totalDebt_formatted}. That's ${targetDebt.debtToGdp.toFixed(1)}% of GDP (${targetDebt.gdp_formatted}). Debt per citizen is ${targetDebt.debtPerCapita_formatted}.`
     }
     
     // Interest questions
     if (q.includes('interest') || q.includes('debt payment')) {
-      return `Interest payments on the national debt in FY${selectedYear}${yearNote} are ${debtData.interestPayment_formatted}. That's ${debtData.interestToRevenue.toFixed(1)}% of federal revenue - a growing concern.`
+      return `Interest payments on the national debt in FY${targetYear}${yearNote} are ${targetDebt.interestPayment_formatted}. That's ${targetDebt.interestToRevenue.toFixed(1)}% of federal revenue - a growing concern.`
     }
     
     // Workforce questions
     if (q.includes('workforce') || q.includes('employee') || q.includes('federal worker') || q.includes('doge')) {
-      const dogeNote = selectedYear === 2025 ? ' (DOGE cuts reduced workforce by ~350K)' : selectedYear > 2025 ? ' (post-DOGE recovery)' : ''
-      return `Federal civilian workforce in FY${selectedYear}${yearNote}: ${workforceData.totalEmployees_formatted} employees${dogeNote}. Total personnel cost: ${workforceData.totalCompensation_formatted}. Average salary: $${workforceData.avgSalaryAll.toLocaleString()}.`
+      const dogeNote = targetYear === 2025 ? ' (DOGE cuts reduced workforce by ~350K)' : targetYear > 2025 ? ' (post-DOGE recovery)' : ''
+      return `Federal civilian workforce in FY${targetYear}${yearNote}: ${targetWorkforce.totalEmployees_formatted} employees${dogeNote}. Total personnel cost: ${targetWorkforce.totalCompensation_formatted}. Average salary: $${targetWorkforce.avgSalaryAll.toLocaleString()}.`
     }
     
     // Contractor questions  
     if (q.includes('contractor') || q.includes('contract spending') || q.includes('outsourc')) {
-      return `Federal contractor spending in FY${selectedYear}${yearNote}: ${workforceData.contractorSpending_formatted}. Estimated contractor FTEs: ${workforceData.contractorFTE_formatted}. Top contractor is ${contractsData.contractors[0]?.name} at ${contractsData.contractors[0]?.amount_formatted}.`
+      return `Federal contractor spending in FY${targetYear}${yearNote}: ${targetWorkforce.contractorSpending_formatted}. Estimated contractor FTEs: ${targetWorkforce.contractorFTE_formatted}. Top contractor is ${targetContracts.contractors[0]?.name} at ${targetContracts.contractors[0]?.amount_formatted}.`
     }
     
     // Agency questions
     if (q.includes('agency') || q.includes('department') || q.includes('biggest spender') || q.includes('top agency')) {
-      const top3 = data.agencies.slice(0, 3).map((a, i) => `${i + 1}. ${a.name.replace('Department of ', '').replace('the ', '')}: ${a.outlays_formatted}`).join(', ')
-      return `Top spending agencies in FY${selectedYear}${yearNote}: ${top3}. These agencies account for ${data.agencies.slice(0, 3).reduce((sum, a) => sum + a.percent_of_total, 0).toFixed(0)}% of total federal spending.`
+      const top3 = targetData.agencies.slice(0, 3).map((a, i) => `${i + 1}. ${a.name.replace('Department of ', '').replace('the ', '')}: ${a.outlays_formatted}`).join(', ')
+      return `Top spending agencies in FY${targetYear}${yearNote}: ${top3}. These agencies account for ${targetData.agencies.slice(0, 3).reduce((sum, a) => sum + a.percent_of_total, 0).toFixed(0)}% of total federal spending.`
     }
     
     // Social Security questions
     if (q.includes('social security')) {
-      const ss = budgetData.categories.find(c => c.code === 'social_security')
-      return `Social Security spending in FY${selectedYear}${yearNote}: ${ss?.amount_formatted} (${ss?.percent_of_total.toFixed(1)}% of total budget). It's the largest mandatory program and grows automatically based on beneficiary count and COLA adjustments.`
+      const ss = targetBudget.categories.find(c => c.code === 'social_security')
+      return `Social Security spending in FY${targetYear}${yearNote}: ${ss?.amount_formatted} (${ss?.percent_of_total.toFixed(1)}% of total budget). It's the largest mandatory program and grows automatically based on beneficiary count and COLA adjustments.`
     }
     
     // Medicare/Medicaid questions
     if (q.includes('medicare') || q.includes('medicaid') || q.includes('healthcare')) {
-      const medicare = budgetData.categories.find(c => c.code === 'medicare')
-      const medicaid = budgetData.categories.find(c => c.code === 'medicaid')
-      return `Healthcare spending in FY${selectedYear}${yearNote}: Medicare is ${medicare?.amount_formatted}, Medicaid is ${medicaid?.amount_formatted}. Combined they're ${((medicare?.percent_of_total || 0) + (medicaid?.percent_of_total || 0)).toFixed(0)}% of the budget.`
+      const medicare = targetBudget.categories.find(c => c.code === 'medicare')
+      const medicaid = targetBudget.categories.find(c => c.code === 'medicaid')
+      return `Healthcare spending in FY${targetYear}${yearNote}: Medicare is ${medicare?.amount_formatted}, Medicaid is ${medicaid?.amount_formatted}. Combined they're ${((medicare?.percent_of_total || 0) + (medicaid?.percent_of_total || 0)).toFixed(0)}% of the budget.`
     }
     
     // Defense questions
     if (q.includes('defense') || q.includes('military') || q.includes('pentagon')) {
-      const defense = budgetData.categories.find(c => c.code === 'defense')
-      return `Defense spending in FY${selectedYear}${yearNote}: ${defense?.amount_formatted} (${defense?.percent_of_total.toFixed(1)}% of total). It's the largest discretionary category and requires annual congressional appropriation.`
+      const defense = targetBudget.categories.find(c => c.code === 'defense')
+      return `Defense spending in FY${targetYear}${yearNote}: ${defense?.amount_formatted} (${defense?.percent_of_total.toFixed(1)}% of total). It's the largest discretionary category and requires annual congressional appropriation.`
     }
     
     // Mandatory vs Discretionary
     if (q.includes('mandatory') || q.includes('discretionary') || q.includes('budget breakdown')) {
-      return `FY${selectedYear}${yearNote} budget breakdown: Mandatory spending is ${formatCurrencyStatic(budgetData.totals.mandatory)} (${((budgetData.totals.mandatory / budgetData.totalSpending) * 100).toFixed(0)}%), Discretionary is ${formatCurrencyStatic(budgetData.totals.discretionary)} (${((budgetData.totals.discretionary / budgetData.totalSpending) * 100).toFixed(0)}%), Interest is ${formatCurrencyStatic(budgetData.totals.interest)} (${((budgetData.totals.interest / budgetData.totalSpending) * 100).toFixed(0)}%).`
+      return `FY${targetYear}${yearNote} budget breakdown: Mandatory spending is ${formatCurrencyStatic(targetBudget.totals.mandatory)} (${((targetBudget.totals.mandatory / targetBudget.totalSpending) * 100).toFixed(0)}%), Discretionary is ${formatCurrencyStatic(targetBudget.totals.discretionary)} (${((targetBudget.totals.discretionary / targetBudget.totalSpending) * 100).toFixed(0)}%), Interest is ${formatCurrencyStatic(targetBudget.totals.interest)} (${((targetBudget.totals.interest / targetBudget.totalSpending) * 100).toFixed(0)}%).`
     }
     
     // Grants questions
     if (q.includes('grant')) {
-      return `Federal grants in FY${selectedYear}${yearNote}: ${contractsData.totalGrants_formatted}. The largest category is ${contractsData.grants[0]?.name} at ${contractsData.grants[0]?.amount_formatted}. Grants go to states, nonprofits, and research institutions.`
+      return `Federal grants in FY${targetYear}${yearNote}: ${targetContracts.totalGrants_formatted}. The largest category is ${targetContracts.grants[0]?.name} at ${targetContracts.grants[0]?.amount_formatted}. Grants go to states, nonprofits, and research institutions.`
     }
     
     // Projection methodology
@@ -1458,13 +1579,13 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
     
     // Year comparison
     if (q.includes('compare') || q.includes('change') || q.includes('vs') || q.includes('growth')) {
-      const spendingChange = ((data.totalAgency / generateDataForYear(2019).totalAgency) - 1) * 100
-      const debtChange = ((debtData.totalDebt / 22.7e12) - 1) * 100
+      const spendingChange = ((targetData.totalAgency / generateDataForYear(2019).totalAgency) - 1) * 100
+      const debtChange = ((targetDebt.totalDebt / 22.7e12) - 1) * 100
       return `Since FY2019: Total spending is up ${spendingChange.toFixed(0)}%. National debt is up ${debtChange.toFixed(0)}%. Major drivers were COVID relief (2020-2021) and continued mandatory spending growth.`
     }
     
     // Default response
-    return `I can answer questions about:\n• Total spending & deficit\n• Revenue & taxes\n• National debt & interest\n• Workforce & DOGE cuts\n• Contractors & grants\n• Agencies & departments\n• Medicare, Medicaid, Social Security\n• Defense spending\n• Projections (2026-2028)\n\nTry asking something specific!`
+    return `I can answer questions about:\n• Total spending & deficit\n• Revenue & taxes\n• National debt & interest\n• Workforce & DOGE cuts\n• Contractors & grants\n• Agencies & departments\n• Medicare, Medicaid, Social Security\n• Defense spending\n• Projections (2026-2028)\n\nTry asking something specific! You can also mention a year (e.g., "What's the 2028 debt?").`
   }
 
   const handleSubmit = (e) => {
@@ -1499,7 +1620,7 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-16 sm:bottom-20 right-4 sm:right-6 z-50 w-[calc(100%-2rem)] sm:w-96 max-w-md bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col max-h-[70vh] sm:max-h-[500px]">
+        <div className="fixed bottom-16 sm:bottom-20 right-4 sm:right-6 z-50 w-[calc(100%-2rem)] sm:w-96 max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[70vh] sm:max-h-[500px]">
           {/* Header */}
           <div className="bg-blue-600 text-white px-4 py-3 rounded-t-xl flex items-center justify-between">
             <div>
@@ -1516,7 +1637,7 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
                 <div className={`max-w-[85%] px-3 py-2 rounded-lg text-sm ${
                   msg.role === 'user' 
                     ? 'bg-blue-600 text-white rounded-br-none' 
-                    : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                 }`}>
                   <p className="whitespace-pre-wrap">{msg.text}</p>
                 </div>
@@ -1525,14 +1646,14 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
           </div>
 
           {/* Input */}
-          <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
+          <form onSubmit={handleSubmit} className="border-t border-gray-200 dark:border-gray-700 p-3">
             <div className="flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about spending, debt, etc..."
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="flex-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
               <button
                 type="submit"
@@ -1551,9 +1672,104 @@ function ChatBot({ data, revenueData, budgetData, debtData, workforceData, contr
 }
 
 function App() {
+  // Valid tabs for URL param validation
+  const validTabs = ['overview', 'revenue', 'budget', 'debt', 'workforce', 'contracts', 'agencies', 'states', 'projections', 'compare']
+  
+  // Parse URL params on initial load
+  const getInitialState = () => {
+    if (typeof window === 'undefined') return { year: YEAR_CONFIG.lastCompleteFY, tab: 'overview' }
+    
+    const params = new URLSearchParams(window.location.search)
+    const urlYear = parseInt(params.get('year'))
+    const urlTab = params.get('tab')
+    
+    // Validate year (2019-current FY only for dropdown)
+    const validYear = urlYear >= 2019 && urlYear <= YEAR_CONFIG.currentFY ? urlYear : YEAR_CONFIG.lastCompleteFY
+    // Validate tab
+    const validTab = urlTab && validTabs.includes(urlTab) ? urlTab : 'overview'
+    
+    return { year: validYear, tab: validTab }
+  }
+  
+  const initialState = getInitialState()
+  
   // Default to last complete FY (most recent with "final" data)
-  const [selectedYear, setSelectedYear] = useState(YEAR_CONFIG.lastCompleteFY)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [selectedYear, setSelectedYear] = useState(initialState.year)
+  const [activeTab, setActiveTab] = useState(initialState.tab)
+  const [compareYear, setCompareYear] = useState(2019)  // Default comparison year
+  const [isLoading, setIsLoading] = useState(false)  // Loading state for tab transitions
+  
+  // Tab navigation order for keyboard navigation
+  const TAB_ORDER = ['overview', 'revenue', 'budget', 'debt', 'workforce', 'contracts', 'agencies', 'states', 'projections', 'compare']
+  
+  // Simulate loading when changing tabs (demonstrates skeleton loading)
+  const handleTabChange = (tabId) => {
+    if (tabId !== activeTab) {
+      setIsLoading(true)
+      setActiveTab(tabId)
+      // Brief delay to show skeleton loading (simulates async data fetch)
+      setTimeout(() => setIsLoading(false), 300)
+    }
+  }
+  
+  // Keyboard navigation for tabs (arrow keys)
+  const handleTabKeyDown = (e, currentTabId) => {
+    const currentIndex = TAB_ORDER.indexOf(currentTabId)
+    let newIndex = currentIndex
+    
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      newIndex = (currentIndex + 1) % TAB_ORDER.length
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      newIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      newIndex = 0
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      newIndex = TAB_ORDER.length - 1
+    }
+    
+    if (newIndex !== currentIndex) {
+      handleTabChange(TAB_ORDER[newIndex])
+      // Focus the new tab button
+      setTimeout(() => {
+        document.querySelector(`[role="tab"][aria-selected="true"]`)?.focus()
+      }, 0)
+    }
+  }
+  
+  // Update URL when tab or year changes
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (activeTab !== 'overview') params.set('tab', activeTab)
+    if (selectedYear !== YEAR_CONFIG.lastCompleteFY) params.set('year', selectedYear)
+    
+    const newUrl = params.toString() 
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname
+    window.history.replaceState({}, '', newUrl)
+  }, [activeTab, selectedYear])
+  
+  // Dark mode state with localStorage persistence
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('darkMode')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+  
+  // Persist dark mode preference
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode))
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
 
   // Generate spending data for selected year
   const data = useMemo(() => generateDataForYear(selectedYear), [selectedYear])
@@ -1700,12 +1916,17 @@ function App() {
   const isCurrentFY = selectedYear === YEAR_CONFIG.currentFY
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-200 ${darkMode ? 'bg-gray-900' : 'bg-gray-50 dark:bg-gray-700'}`}>
+      {/* Skip to main content link for keyboard users */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      
       {/* Projection Banner */}
       {isProjection && (
-        <div className={`${isCurrentFY ? 'bg-blue-500' : 'bg-amber-500'} text-white py-2`}>
+        <div className={`${isCurrentFY ? 'bg-blue-500' : 'bg-amber-500'} text-white py-2`} role="alert" aria-live="polite">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-center gap-2">
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-xs sm:text-sm font-medium">
@@ -1720,36 +1941,63 @@ function App() {
       
       {/* Project Header */}
       <div className="bg-blue-900 text-white py-2 sm:py-3">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <h1 className="text-base sm:text-xl font-bold text-center">Federal Spending Analysis by Neil M.</h1>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex justify-between items-center">
+          <h1 className="text-base sm:text-xl font-bold">Federal Spending Analysis by Neil M.</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="p-1.5 sm:p-2 rounded-lg bg-blue-800 hover:bg-blue-700 transition-colors print:hidden"
+              aria-label="Print dashboard"
+              title="Print / Save as PDF"
+            >
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-1.5 sm:p-2 rounded-lg bg-blue-800 hover:bg-blue-700 transition-colors print:hidden"
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {darkMode ? (
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
       
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className={`shadow-sm border-b transition-colors duration-200 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="max-w-7xl mx-auto px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Federal Spending Dashboard</h1>
-              <p className="text-xs sm:text-sm text-gray-500">
+              <h1 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900 dark:text-white dark:text-white'}`}>Federal Spending Dashboard</h1>
+              <p className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 Tracking $6+ trillion in annual federal spending
                 {DATA_LAST_UPDATED && (
-                  <span className="ml-2 text-gray-400">
+                  <span className={`ml-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                     | Updated: {new Date(DATA_LAST_UPDATED).toLocaleDateString()}
                   </span>
                 )}
               </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
-              <label className="text-xs sm:text-sm text-gray-600">Fiscal Year:</label>
+              <label htmlFor="fiscal-year-select" className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Fiscal Year:</label>
               <select 
+                id="fiscal-year-select"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 text-sm"
+                aria-label="Select fiscal year"
+                className={`border rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 focus:ring-2 focus:ring-blue-500 text-sm transition-colors duration-200 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900 dark:text-white dark:text-white'}`}
               >
-                <optgroup label={`Projections (FY${YEAR_CONFIG.currentFY}+)`}>
-                  {YEAR_CONFIG.projectedYears.map(y => (
-                    <option key={y} value={y}>FY {y} {y === YEAR_CONFIG.currentFY ? '(Current)' : '(Projected)'}</option>
-                  ))}
+                <optgroup label="Current FY">
+                  <option value={YEAR_CONFIG.currentFY}>FY {YEAR_CONFIG.currentFY} (Current)</option>
                 </optgroup>
                 <optgroup label="Historical (Complete)">
                   {YEAR_CONFIG.historicalYears.map(y => (
@@ -1762,9 +2010,9 @@ function App() {
         </div>
       </header>
 
-      <div className="bg-white border-b border-gray-200">
+      <div className={`border-b transition-colors duration-200 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-          <nav className="flex gap-1 sm:gap-4 md:gap-8 overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-0">
+          <nav className="flex gap-1 sm:gap-4 md:gap-8 overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-0" role="tablist" aria-label="Dashboard sections">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'revenue', label: 'Revenue' },
@@ -1773,15 +2021,24 @@ function App() {
               { id: 'workforce', label: 'Workforce' },
               { id: 'contracts', label: 'Contracts' },
               { id: 'agencies', label: 'Agencies' },
-              { id: 'states', label: 'States' }
+              { id: 'states', label: 'States' },
+              { id: 'projections', label: 'Projections' },
+              { id: 'compare', label: 'Compare' }
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls="main-content"
+                tabIndex={activeTab === tab.id ? 0 : -1}
+                onClick={() => handleTabChange(tab.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
                 className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap flex-shrink-0 ${
                   activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-500'
+                    : darkMode 
+                      ? 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
                 {tab.label}
@@ -1791,8 +2048,11 @@ function App() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
-        {activeTab === 'overview' && overview && (
+      <main id="main-content" role="tabpanel" aria-live="polite" className="max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+        {/* Show skeleton loading during tab transitions */}
+        {isLoading && <OverviewSkeleton />}
+        
+        {!isLoading && activeTab === 'overview' && overview && (
           <div className="space-y-4 sm:space-y-8">
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
               <StatCard 
@@ -1807,10 +2067,10 @@ function App() {
                 subtitle={`FY ${overview.fiscal_year}`}
                 change={overview.revenue_yoy_change}
               />
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Budget Deficit</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Budget Deficit</p>
                 <p className="text-xl sm:text-3xl font-bold text-red-600 mt-1 sm:mt-2">-{overview.deficit_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">Spending exceeds revenue</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Spending exceeds revenue</p>
               </div>
               <StatCard 
                 title="Top Agency" 
@@ -1820,23 +2080,23 @@ function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Revenue vs Spending Trend</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Revenue vs Spending Trend</h3>
                 <div className="flex flex-wrap gap-2 sm:gap-4 mb-2 text-xs sm:text-sm">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> Revenue</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded"></span> Spending</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> Revenue</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded"></span> Spending</span>
                 </div>
                 {trend && <RevenueTrendChart data={trend.years} />}
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Top 5 Agencies</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Top 5 Agencies</h3>
                 <AgencyChart agencies={overview.top_agencies} />
               </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'revenue' && revenue && (
+        {!isLoading && activeTab === 'revenue' && revenue && (
           <div className="space-y-4 sm:space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
               <StatCard 
@@ -1850,46 +2110,46 @@ function App() {
                 value={revenue.revenues[0]?.amount_formatted}
                 subtitle={revenue.revenues[0]?.name}
               />
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Budget Deficit</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Budget Deficit</p>
                 <p className="text-xl sm:text-3xl font-bold text-red-600 mt-1 sm:mt-2">-{formatCurrencyStatic(Math.abs(deficit))}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{((deficit / revenue.total) * 100).toFixed(0)}% of revenue</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{((deficit / revenue.total) * 100).toFixed(0)}% of revenue</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Revenue by Source - FY {revenue.fiscal_year}</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Revenue by Source - FY {revenue.fiscal_year}</h3>
                 <RevenueChart revenues={revenue.revenues} />
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Revenue vs Spending Trend</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Revenue vs Spending Trend</h3>
                 <div className="flex flex-wrap gap-2 sm:gap-4 mb-2 text-xs sm:text-sm">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> Revenue</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded"></span> Spending</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> Revenue</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded"></span> Spending</span>
                 </div>
                 {trend && <RevenueTrendChart data={trend.years} />}
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">All Revenue Sources - FY {revenue.fiscal_year}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">All Revenue Sources - FY {revenue.fiscal_year}</h3>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">% of Total</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">YoY Change</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Source</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">% of Total</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">YoY Change</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                     {revenue.revenues.map((source, idx) => (
-                      <tr key={source.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-6 py-4 font-medium text-gray-900">{source.name}</td>
-                        <td className="px-6 py-4 text-gray-900">{source.amount_formatted}</td>
-                        <td className="px-6 py-4 text-gray-500">{source.percent_of_total.toFixed(1)}%</td>
+                      <tr key={source.code} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white dark:text-white">{source.name}</td>
+                        <td className="px-6 py-4 text-gray-900 dark:text-white dark:text-white">{source.amount_formatted}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{source.percent_of_total.toFixed(1)}%</td>
                         <td className="px-6 py-4">
                           <span className={source.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}>
                             {source.yoy_change >= 0 ? '+' : ''}{(source.yoy_change * 100).toFixed(1)}%
@@ -1904,74 +2164,82 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'budget' && budget && (
+        {!isLoading && activeTab === 'budget' && budget && (
           <div className="space-y-4 sm:space-y-8">
+            <div className="bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-700 p-4 sm:p-6">
+              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 text-sm sm:text-base">Understanding Budget Categories</h4>
+              <ul className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                <li><strong>Mandatory (65%):</strong> Required by law - Social Security, Medicare, Medicaid.</li>
+                <li><strong>Discretionary (30%):</strong> Annual appropriation - defense, education, transportation.</li>
+                <li><strong>Net Interest (5%):</strong> Interest on national debt. Growing rapidly.</li>
+              </ul>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500"></div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Mandatory Spending</p>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Mandatory Spending</p>
                 </div>
-                <p className="text-xl sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.mandatory)}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{((budget.totals.mandatory / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+                <p className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.mandatory)}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{((budget.totals.mandatory / budget.totalSpending) * 100).toFixed(0)}% of total</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Discretionary Spending</p>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Discretionary Spending</p>
                 </div>
-                <p className="text-xl sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.discretionary)}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{((budget.totals.discretionary / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+                <p className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.discretionary)}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{((budget.totals.discretionary / budget.totalSpending) * 100).toFixed(0)}% of total</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-gray-500"></div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Net Interest</p>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Net Interest</p>
                 </div>
-                <p className="text-xl sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.interest)}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{((budget.totals.interest / budget.totalSpending) * 100).toFixed(0)}% of total</p>
+                <p className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{formatCurrencyStatic(budget.totals.interest)}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{((budget.totals.interest / budget.totalSpending) * 100).toFixed(0)}% of total</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Budget Composition - FY {budget.fiscal_year}</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Budget Composition - FY {budget.fiscal_year}</h3>
                 <CategoryPieChart totals={budget.totals} totalSpending={budget.totalSpending} />
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Category Trends Over Time</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Category Trends Over Time</h3>
                 {categoryTrend && <CategoryTrendChart data={categoryTrend.years} />}
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">All Budget Categories - FY {budget.fiscal_year}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">All Budget Categories - FY {budget.fiscal_year}</h3>
               <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">% of Total</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">YoY Change</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Category</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Program</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Amount</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">% of Total</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">YoY Change</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                     {budget.categories.map((cat, idx) => (
-                      <tr key={cat.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <tr key={cat.code} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
                         <td className="px-3 sm:px-6 py-3 sm:py-4">
                           <span className={`inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
                             cat.category === 'mandatory' ? 'bg-red-100 text-red-800' :
                             cat.category === 'discretionary' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'
+                            'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-200'
                           }`}>
                             {cat.category.charAt(0).toUpperCase() + cat.category.slice(1)}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 text-xs sm:text-sm">{cat.name}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{cat.amount_formatted}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 text-xs sm:text-sm hidden sm:table-cell">{cat.percent_of_total.toFixed(1)}%</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">{cat.name}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm">{cat.amount_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 dark:text-gray-400 text-xs sm:text-sm hidden sm:table-cell">{cat.percent_of_total.toFixed(1)}%</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell">
                           <span className={`text-xs sm:text-sm ${cat.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {cat.yoy_change >= 0 ? '+' : ''}{(cat.yoy_change * 100).toFixed(1)}%
@@ -1983,110 +2251,111 @@ function App() {
                 </table>
               </div>
             </div>
-
-            <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 sm:p-6">
-              <h4 className="font-semibold text-amber-800 mb-2 text-sm sm:text-base">Understanding Budget Categories</h4>
-              <ul className="text-xs sm:text-sm text-amber-700 space-y-1">
-                <li><strong>Mandatory (65%):</strong> Required by law - Social Security, Medicare, Medicaid.</li>
-                <li><strong>Discretionary (30%):</strong> Annual appropriation - defense, education, transportation.</li>
-                <li><strong>Net Interest (5%):</strong> Interest on national debt. Growing rapidly.</li>
-              </ul>
-            </div>
           </div>
         )}
 
-        {activeTab === 'debt' && debt && (
+        {!isLoading && activeTab === 'debt' && debt && (
           <div className="space-y-4 sm:space-y-8">
+            <div className="bg-red-50 dark:bg-red-900/30 rounded-xl border border-red-200 dark:border-red-700 p-6">
+              <h4 className="font-semibold text-red-800 dark:text-red-200 mb-2">Understanding the National Debt</h4>
+              <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
+                <li><strong>Debt-to-GDP above 100%:</strong> The debt exceeds the entire annual economic output of the country.</li>
+                <li><strong>Interest crowding out:</strong> As interest payments grow, less is available for programs and investments.</li>
+                <li><strong>Public debt matters most:</strong> This is what the government owes to external creditors and must pay interest on.</li>
+                <li><strong>Sustainability concern:</strong> If interest rates rise or GDP slows, debt servicing becomes more difficult.</li>
+              </ul>
+            </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Total National Debt</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Total National Debt</p>
                 <p className="text-lg sm:text-3xl font-bold text-red-600 mt-1 sm:mt-2">{debt.totalDebt_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">FY {debt.fiscal_year}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">FY {debt.fiscal_year}</p>
                 {debt.debtYoyChange !== 0 && (
                   <p className="text-xs sm:text-sm text-red-600 mt-1 sm:mt-2">
                     ↑ {(debt.debtYoyChange * 100).toFixed(1)}%
                   </p>
-                )}n              </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Debt-to-GDP Ratio</p>
+                )}
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Debt-to-GDP Ratio</p>
                 <p className={`text-lg sm:text-3xl font-bold mt-1 sm:mt-2 ${debt.debtToGdp > 100 ? 'text-red-600' : 'text-amber-600'}`}>
                   {debt.debtToGdp.toFixed(1)}%
                 </p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">GDP: {debt.gdp_formatted}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">GDP: {debt.gdp_formatted}</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Interest Payments</p>
-                <p className="text-lg sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{debt.interestPayment_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{debt.interestToRevenue.toFixed(1)}% of revenue</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Interest Payments</p>
+                <p className="text-lg sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{debt.interestPayment_formatted}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{debt.interestToRevenue.toFixed(1)}% of revenue</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Debt Per Citizen</p>
-                <p className="text-lg sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{debt.debtPerCapita_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">Per capita share</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Debt Per Citizen</p>
+                <p className="text-lg sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{debt.debtPerCapita_formatted}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Per capita share</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Debt vs GDP Trend</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Debt vs GDP Trend</h3>
                 <div className="flex flex-wrap gap-2 sm:gap-4 mb-2 text-xs sm:text-sm">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-red-600 rounded"></span> Total Debt</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> GDP</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-red-600 rounded"></span> Total Debt</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded"></span> GDP</span>
                 </div>
                 {debtTrend && <DebtTrendChart data={debtTrend.years} />}
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Debt-to-GDP Ratio Trend</h3>
-                <p className="text-xs sm:text-sm text-gray-500 mb-2">Above 100% = Debt exceeds economic output</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Debt-to-GDP Ratio Trend</h3>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2">Above 100% = Debt exceeds economic output</p>
                 {debtTrend && <DebtToGdpChart data={debtTrend.years} />}
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Debt Breakdown - FY {debt.fiscal_year}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Debt Breakdown - FY {debt.fiscal_year}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <div>
-                  <h4 className="font-medium text-gray-700 mb-2 sm:mb-3 text-sm sm:text-base">By Holder</h4>
+                  <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2 sm:mb-3 text-sm sm:text-base">By Holder</h4>
                   <div className="space-y-2 sm:space-y-3">
-                    <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-900 text-xs sm:text-sm">Debt Held by Public</p>
-                        <p className="text-[10px] sm:text-sm text-gray-500">Foreign governments, investors, Fed</p>
+                        <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Debt Held by Public</p>
+                        <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">Foreign governments, investors, Fed</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-gray-900 text-xs sm:text-sm">{debt.publicDebt_formatted}</p>
-                        <p className="text-[10px] sm:text-sm text-gray-500">{((debt.publicDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
+                        <p className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{debt.publicDebt_formatted}</p>
+                        <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">{((debt.publicDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
                       </div>
                     </div>
-                    <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-900 text-xs sm:text-sm">Intragov Holdings</p>
-                        <p className="text-[10px] sm:text-sm text-gray-500">Social Security trust fund, etc.</p>
+                        <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Intragov Holdings</p>
+                        <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">Social Security trust fund, etc.</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-gray-900 text-xs sm:text-sm">{debt.intragovDebt_formatted}</p>
-                        <p className="text-sm text-gray-500">{((debt.intragovDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
+                        <p className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">{debt.intragovDebt_formatted}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{((debt.intragovDebt / debt.totalDebt) * 100).toFixed(0)}%</p>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Key Ratios</h4>
+                  <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Key Ratios</h4>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-700">Public Debt-to-GDP</p>
-                      <p className={`font-bold ${debt.publicDebtToGdp > 80 ? 'text-amber-600' : 'text-gray-900'}`}>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <p className="text-gray-700 dark:text-gray-300">Public Debt-to-GDP</p>
+                      <p className={`font-bold ${debt.publicDebtToGdp > 80 ? 'text-amber-600' : 'text-gray-900 dark:text-white dark:text-white'}`}>
                         {debt.publicDebtToGdp.toFixed(1)}%
                       </p>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-700">Interest as % of Revenue</p>
-                      <p className={`font-bold ${debt.interestToRevenue > 15 ? 'text-red-600' : 'text-gray-900'}`}>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <p className="text-gray-700 dark:text-gray-300">Interest as % of Revenue</p>
+                      <p className={`font-bold ${debt.interestToRevenue > 15 ? 'text-red-600' : 'text-gray-900 dark:text-white dark:text-white'}`}>
                         {debt.interestToRevenue.toFixed(1)}%
                       </p>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-700">Year-over-Year Change</p>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <p className="text-gray-700 dark:text-gray-300">Year-over-Year Change</p>
                       <p className="font-bold text-red-600">
                         +{(debt.debtYoyChange * 100).toFixed(1)}%
                       </p>
@@ -2095,81 +2364,79 @@ function App() {
                 </div>
               </div>
             </div>
-
-            <div className="bg-red-50 rounded-xl border border-red-200 p-6">
-              <h4 className="font-semibold text-red-800 mb-2">Understanding the National Debt</h4>
-              <ul className="text-sm text-red-700 space-y-1">
-                <li><strong>Debt-to-GDP above 100%:</strong> The debt exceeds the entire annual economic output of the country.</li>
-                <li><strong>Interest crowding out:</strong> As interest payments grow, less is available for programs and investments.</li>
-                <li><strong>Public debt matters most:</strong> This is what the government owes to external creditors and must pay interest on.</li>
-                <li><strong>Sustainability concern:</strong> If interest rates rise or GDP slows, debt servicing becomes more difficult.</li>
-              </ul>
-            </div>
           </div>
         )}
 
-        {activeTab === 'workforce' && workforce && (
+        {!isLoading && activeTab === 'workforce' && workforce && (
           <div className="space-y-4 sm:space-y-8">
+            <div className="bg-purple-50 dark:bg-purple-900/30 rounded-xl border border-purple-200 dark:border-purple-700 p-4 sm:p-6">
+              <h4 className="font-semibold text-purple-800 dark:text-purple-200 mb-2 text-sm sm:text-base">Understanding the Federal Workforce</h4>
+              <ul className="text-xs sm:text-sm text-purple-700 dark:text-purple-300 space-y-1">
+                <li><strong>Civilian only:</strong> Active duty military (~1.3M) is separate.</li>
+                <li><strong>FY2025 DOGE cuts:</strong> ~350K federal employees cut via buyouts, layoffs, and hiring freezes.</li>
+                <li><strong>Hardest hit:</strong> IRS, USAID, EPA, Education, HHS saw 20-25% reductions.</li>
+              </ul>
+            </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Federal Employees</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Federal Employees</p>
                 <p className="text-lg sm:text-3xl font-bold text-purple-600 mt-1 sm:mt-2">{workforce.totalEmployees_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">FY {workforce.fiscal_year}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">FY {workforce.fiscal_year}</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Personnel Cost</p>
-                <p className="text-lg sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{workforce.totalCompensation_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">Salaries & benefits</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Personnel Cost</p>
+                <p className="text-lg sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{workforce.totalCompensation_formatted}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Salaries & benefits</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Avg. Salary</p>
-                <p className="text-lg sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">${workforce.avgSalaryAll.toLocaleString()}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">All agencies</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Avg. Salary</p>
+                <p className="text-lg sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">${workforce.avgSalaryAll.toLocaleString()}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">All agencies</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Contractors</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Contractors</p>
                 <p className="text-lg sm:text-3xl font-bold text-amber-600 mt-1 sm:mt-2">{workforce.contractorSpending_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">~{workforce.contractorFTE_formatted} FTEs</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">~{workforce.contractorFTE_formatted} FTEs</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Employees by Agency - FY {workforce.fiscal_year}</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Employees by Agency - FY {workforce.fiscal_year}</h3>
                 <WorkforceChart agencies={workforce.agencies} />
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Federal vs Contractor Trend</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Federal vs Contractor Trend</h3>
                 <div className="flex flex-wrap gap-2 sm:gap-4 mb-2 text-xs sm:text-sm">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-600 rounded"></span> Federal</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-amber-500 rounded"></span> Contractors</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-purple-600 rounded"></span> Federal</span>
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-200"><span className="w-2 h-2 sm:w-3 sm:h-3 bg-amber-500 rounded"></span> Contractors</span>
                 </div>
                 {workforceTrend && <WorkforceTrendChart data={workforceTrend.years} />}
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Federal Workforce by Agency - FY {workforce.fiscal_year}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Federal Workforce by Agency - FY {workforce.fiscal_year}</h3>
               <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Agency</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Employees</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Avg Salary</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Total Comp</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">% of WF</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">YoY</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Agency</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Employees</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">Avg Salary</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">Total Comp</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">% of WF</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">YoY</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                     {workforce.agencies.map((agency, idx) => (
-                      <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 15)}{agency.name.replace('Department of ', '').replace('the ', '').length > 15 ? '...' : ''}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{agency.employees_formatted}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm hidden sm:table-cell">{agency.avg_salary_formatted}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm hidden md:table-cell">{agency.total_compensation_formatted}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 text-xs sm:text-sm hidden sm:table-cell">{agency.percent_of_total.toFixed(1)}%</td>
+                      <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 15)}{agency.name.replace('Department of ', '').replace('the ', '').length > 15 ? '...' : ''}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm">{agency.employees_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm hidden sm:table-cell">{agency.avg_salary_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm hidden md:table-cell">{agency.total_compensation_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 dark:text-gray-400 text-xs sm:text-sm hidden sm:table-cell">{agency.percent_of_total.toFixed(1)}%</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
                           <span className={`text-xs sm:text-sm ${agency.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {agency.yoy_change >= 0 ? '+' : ''}{(agency.yoy_change * 100).toFixed(1)}%
@@ -2181,86 +2448,85 @@ function App() {
                 </table>
               </div>
             </div>
-
-            <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 sm:p-6">
-              <h4 className="font-semibold text-purple-800 mb-2 text-sm sm:text-base">Understanding the Federal Workforce</h4>
-              <ul className="text-xs sm:text-sm text-purple-700 space-y-1">
-                <li><strong>Civilian only:</strong> Active duty military (~1.3M) is separate.</li>
-                <li><strong>FY2025 DOGE cuts:</strong> ~350K federal employees cut via buyouts, layoffs, and hiring freezes.</li>
-                <li><strong>Hardest hit:</strong> IRS, USAID, EPA, Education, HHS saw 20-25% reductions.</li>
-              </ul>
-            </div>
           </div>
         )}
 
-        {activeTab === 'contracts' && contracts && (
+        {!isLoading && activeTab === 'contracts' && contracts && (
           <div className="space-y-4 sm:space-y-8">
+            <div className="bg-orange-50 dark:bg-orange-900/30 rounded-xl border border-orange-200 dark:border-orange-700 p-4 sm:p-6">
+              <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-2 text-sm sm:text-base">Understanding Federal Procurement</h4>
+              <ul className="text-xs sm:text-sm text-orange-700 dark:text-orange-300 space-y-1">
+                <li><strong>Defense dominates:</strong> Top 5 contractors are defense companies.</li>
+                <li><strong>Competition saves:</strong> Competed contracts cost 15-20% less.</li>
+                <li><strong>Grants vs Contracts:</strong> Grants to states/nonprofits; contracts buy goods.</li>
+              </ul>
+            </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Contract Spending</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Contract Spending</p>
                 <p className="text-lg sm:text-3xl font-bold text-orange-600 mt-1 sm:mt-2">{contracts.totalContracts_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">FY {contracts.fiscal_year}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">FY {contracts.fiscal_year}</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Federal Grants</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Federal Grants</p>
                 <p className="text-lg sm:text-3xl font-bold text-green-600 mt-1 sm:mt-2">{contracts.totalGrants_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">To states & orgs</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">To states & orgs</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Top 10 Contractors</p>
-                <p className="text-lg sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">{contracts.topContractorTotal_formatted}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{((contracts.topContractorTotal / contracts.totalContracts) * 100).toFixed(0)}% of contracts</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Top 10 Contractors</p>
+                <p className="text-lg sm:text-3xl font-bold text-gray-900 dark:text-white mt-1 sm:mt-2">{contracts.topContractorTotal_formatted}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">{((contracts.topContractorTotal / contracts.totalContracts) * 100).toFixed(0)}% of contracts</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-                <p className="text-xs sm:text-sm font-medium text-gray-500">Competed</p>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Competed</p>
                 <p className="text-lg sm:text-3xl font-bold text-blue-600 mt-1 sm:mt-2">{contracts.competition.competed}%</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">Sole: {contracts.competition.sole_source}%</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Sole: {contracts.competition.sole_source}%</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Top Contractors - FY {contracts.fiscal_year}</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Top Contractors - FY {contracts.fiscal_year}</h3>
                 <TopContractorsChart contractors={contracts.contractors} />
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Contract Spending by Category</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Contract Spending by Category</h3>
                 <ContractCategoryChart categories={contracts.categories} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Federal Grants by Category</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Federal Grants by Category</h3>
                 <GrantsCategoryChart grants={contracts.grants} />
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Contract Competition Rate</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Contract Competition Rate</h3>
                 <div className="space-y-3 sm:space-y-4 mt-4 sm:mt-6">
                   <div>
                     <div className="flex justify-between text-xs sm:text-sm mb-1">
-                      <span className="text-gray-600">Competed (Full & Open)</span>
+                      <span className="text-gray-600 dark:text-gray-400">Competed (Full & Open)</span>
                       <span className="font-medium">{contracts.competition.competed}%</span>
                     </div>
-                    <div className="h-3 sm:h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-3 sm:h-4 bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div className="h-full bg-green-500 rounded-full" style={{ width: `${contracts.competition.competed}%` }}></div>
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-xs sm:text-sm mb-1">
-                      <span className="text-gray-600">Sole Source / No Competition</span>
+                      <span className="text-gray-600 dark:text-gray-400">Sole Source / No Competition</span>
                       <span className="font-medium">{contracts.competition.sole_source}%</span>
                     </div>
-                    <div className="h-3 sm:h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-3 sm:h-4 bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div className="h-full bg-red-500 rounded-full" style={{ width: `${contracts.competition.sole_source}%` }}></div>
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-xs sm:text-sm mb-1">
-                      <span className="text-gray-600">Other (Limited, Set-aside)</span>
+                      <span className="text-gray-600 dark:text-gray-400">Other (Limited, Set-aside)</span>
                       <span className="font-medium">{contracts.competition.other}%</span>
                     </div>
-                    <div className="h-3 sm:h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-3 sm:h-4 bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-500 rounded-full" style={{ width: `${contracts.competition.other}%` }}></div>
                     </div>
                   </div>
@@ -2268,73 +2534,106 @@ function App() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Top 10 Federal Contractors - FY {contracts.fiscal_year}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between items-center mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white dark:text-white">Top 10 Federal Contractors - FY {contracts.fiscal_year}</h3>
+                <button
+                  onClick={() => downloadCSV(
+                    contracts.contractors,
+                    `federal-contractors-fy${selectedYear}.csv`,
+                    [
+                      { label: 'Rank', accessor: (c, i) => i + 1 },
+                      { label: 'Contractor', accessor: c => c.name },
+                      { label: 'Sector', accessor: c => c.sector },
+                      { label: 'Amount', accessor: c => c.amount },
+                      { label: 'Amount Formatted', accessor: c => c.amount_formatted }
+                    ]
+                  )}
+                  className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  CSV
+                </button>
+              </div>
               <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Contractor</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Sector</th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rank</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Contractor</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">Sector</th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Value</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                     {contracts.contractors.map((contractor, idx) => (
-                      <tr key={contractor.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 text-xs sm:text-sm">#{idx + 1}</td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 text-xs sm:text-sm">{contractor.name.substring(0, 12)}{contractor.name.length > 12 ? '...' : ''}</td>
+                      <tr key={contractor.name} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 dark:text-gray-400 text-xs sm:text-sm">#{idx + 1}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">{contractor.name.substring(0, 12)}{contractor.name.length > 12 ? '...' : ''}</td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell">
                           <span className={`inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
                             contractor.sector === 'Defense' ? 'bg-blue-100 text-blue-800' :
                             contractor.sector === 'Healthcare' ? 'bg-green-100 text-green-800' :
-                            contractor.sector === 'IT Services' ? 'bg-purple-100 text-purple-800' :
-                            'bg-gray-100 text-gray-800'
+                            contractor.sector === 'IT Services' ? 'bg-purple-100 text-purple-800 dark:text-purple-200' :
+                            'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-200'
                           }`}>
                             {contractor.sector}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{contractor.amount_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm">{contractor.amount_formatted}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-
-            <div className="bg-orange-50 rounded-xl border border-orange-200 p-4 sm:p-6">
-              <h4 className="font-semibold text-orange-800 mb-2 text-sm sm:text-base">Understanding Federal Procurement</h4>
-              <ul className="text-xs sm:text-sm text-orange-700 space-y-1">
-                <li><strong>Defense dominates:</strong> Top 5 contractors are defense companies.</li>
-                <li><strong>Competition saves:</strong> Competed contracts cost 15-20% less.</li>
-                <li><strong>Grants vs Contracts:</strong> Grants to states/nonprofits; contracts buy goods.</li>
-              </ul>
-            </div>
           </div>
         )}
 
-        {activeTab === 'agencies' && agencies && (
-          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">All Federal Agencies - FY {selectedYear}</h3>
+        {!isLoading && activeTab === 'agencies' && agencies && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white dark:text-white">All Federal Agencies - FY {selectedYear}</h3>
+              <button
+                onClick={() => downloadCSV(
+                  agencies.agencies,
+                  `federal-agencies-fy${selectedYear}.csv`,
+                  [
+                    { label: 'Agency', accessor: a => a.name },
+                    { label: 'Outlays', accessor: a => a.outlays },
+                    { label: 'Outlays Formatted', accessor: a => a.outlays_formatted },
+                    { label: '% of Total', accessor: a => a.percent_of_total.toFixed(2) },
+                    { label: 'YoY Change %', accessor: a => (a.yoy_change * 100).toFixed(2) }
+                  ]
+                )}
+                className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                CSV
+              </button>
+            </div>
             <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Agency</th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Outlays</th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">% of Total</th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">YoY Change</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Agency</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Outlays</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">% of Total</th>
+                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">YoY Change</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                   {agencies.agencies.map((agency, idx) => (
-                    <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={agency.code} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
                       <td className="px-3 sm:px-6 py-3 sm:py-4">
-                        <span className="font-medium text-gray-900 text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 20)}{agency.name.replace('Department of ', '').replace('the ', '').length > 20 ? '...' : ''}</span>
+                        <span className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm">{agency.name.replace('Department of ', '').replace('the ', '').substring(0, 20)}{agency.name.replace('Department of ', '').replace('the ', '').length > 20 ? '...' : ''}</span>
                       </td>
-                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 text-xs sm:text-sm">{agency.outlays_formatted}</td>
-                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 text-xs sm:text-sm hidden sm:table-cell">{agency.percent_of_total.toFixed(1)}%</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-900 dark:text-white text-xs sm:text-sm">{agency.outlays_formatted}</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-500 dark:text-gray-400 text-xs sm:text-sm hidden sm:table-cell">{agency.percent_of_total.toFixed(1)}%</td>
                       <td className="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell">
                         <span className={`text-xs sm:text-sm ${agency.yoy_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {agency.yoy_change >= 0 ? '+' : ''}{(agency.yoy_change * 100).toFixed(1)}%
@@ -2348,27 +2647,323 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'states' && states && (
+        {!isLoading && activeTab === 'states' && states && (
           <div className="space-y-4 sm:space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Interactive Spending Map - FY {selectedYear}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">Interactive Spending Map - FY {selectedYear}</h3>
               <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">Tap/hover a state to see details</p>
               <USMap states={states.states} />
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">State-by-State Spending - FY {selectedYear}</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between items-center mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white dark:text-white">State-by-State Spending - FY {selectedYear}</h3>
+                <button
+                  onClick={() => downloadCSV(
+                    states.states,
+                    `state-spending-fy${selectedYear}.csv`,
+                    [
+                      { label: 'State', accessor: s => s.name },
+                      { label: 'Total Spending', accessor: s => s.outlays },
+                      { label: 'Spending Formatted', accessor: s => s.outlays_formatted },
+                      { label: 'Population', accessor: s => s.population },
+                      { label: 'Per Capita', accessor: s => s.per_capita },
+                      { label: 'Per Capita Formatted', accessor: s => s.per_capita_formatted }
+                    ]
+                  )}
+                  className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  CSV
+                </button>
+              </div>
               <StateTable states={states.states} />
             </div>
           </div>
         )}
+
+        {!isLoading && activeTab === 'projections' && (
+          <div className="space-y-4 sm:space-y-8">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl border border-blue-200 dark:border-blue-700 p-4 sm:p-6">
+              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">FY2026-2028 Projections</h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300">These projections use historical growth rates, CBO estimates, and post-DOGE normalization assumptions. Mandatory spending continues automatic growth while workforce gradually recovers.</p>
+            </div>
+
+            {/* Assumptions */}
+            <div className="bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-700 p-4 sm:p-6">
+              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Projection Assumptions</h4>
+              <ul className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                <li><strong>Spending:</strong> ~3% annual growth for mandatory programs, 2% for discretionary.</li>
+                <li><strong>Revenue:</strong> ~2% annual growth assuming stable tax policy.</li>
+                <li><strong>Debt:</strong> ~5% annual growth based on continued deficits (~$1.5-2T/year).</li>
+                <li><strong>Workforce:</strong> Post-DOGE recovery of 2-3% annually, not returning to pre-cut levels.</li>
+                <li><strong>Interest:</strong> Rising as debt grows and rates remain elevated.</li>
+              </ul>
+            </div>
+
+            {/* Key Metrics Comparison */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Key Metrics by Year</h3>
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                      {[2026, 2027, 2028].map(year => (
+                        <th key={year} className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">FY{year}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                    {(() => {
+                      const projYears = [2026, 2027, 2028].map(year => ({
+                        year,
+                        data: generateDataForYear(year),
+                        revenue: generateRevenueForYear(year),
+                        budget: generateBudgetCategoriesForYear(year),
+                        debt: generateDebtDataForYear(year, generateRevenueForYear(year).totalRevenue, generateBudgetCategoriesForYear(year).totals.interest),
+                        workforce: generateWorkforceDataForYear(year)
+                      }))
+                      return (
+                        <>
+                          <tr className="bg-white dark:bg-gray-800">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Total Spending</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(p.data.totalAgency)}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-gray-50 dark:bg-gray-700">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Total Revenue</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(p.revenue.totalRevenue)}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-white dark:bg-gray-800">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Budget Deficit</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">-{formatCurrencyStatic(p.data.totalAgency - p.revenue.totalRevenue)}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-gray-50 dark:bg-gray-700">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">National Debt</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">{p.debt.totalDebt_formatted}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-white dark:bg-gray-800">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Debt-to-GDP</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-amber-600 text-xs sm:text-sm">{p.debt.debtToGdp.toFixed(1)}%</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-gray-50 dark:bg-gray-700">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Interest Payments</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(p.budget.totals.interest)}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-white dark:bg-gray-800">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Federal Workforce</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-purple-600 text-xs sm:text-sm">{p.workforce.totalEmployees_formatted}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-gray-50 dark:bg-gray-700">
+                            <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Contractor Spending</td>
+                            {projYears.map(p => (
+                              <td key={p.year} className="px-3 sm:px-6 py-3 text-amber-600 text-xs sm:text-sm">{p.workforce.contractorSpending_formatted}</td>
+                            ))}
+                          </tr>
+                        </>
+                      )
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Spending Category Projections */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Spending by Category (FY2028)</h3>
+                {(() => {
+                  const proj2028 = generateBudgetCategoriesForYear(2028)
+                  return <CategoryPieChart totals={proj2028.totals} totalSpending={proj2028.totalSpending} />
+                })()}
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Debt Trajectory</h3>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">Projection: National debt continues rising as deficits persist</p>
+                {debtTrend && <DebtTrendChart data={debtTrend.years.filter(y => y.fiscal_year >= 2024)} />}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && activeTab === 'compare' && (() => {
+          // Generate data for both years
+          const year1Data = generateDataForYear(selectedYear)
+          const year2Data = generateDataForYear(compareYear)
+          const year1Revenue = generateRevenueForYear(selectedYear)
+          const year2Revenue = generateRevenueForYear(compareYear)
+          const year1Budget = generateBudgetCategoriesForYear(selectedYear)
+          const year2Budget = generateBudgetCategoriesForYear(compareYear)
+          const year1Debt = generateDebtDataForYear(selectedYear, year1Revenue.totalRevenue, year1Budget.totals.interest)
+          const year2Debt = generateDebtDataForYear(compareYear, year2Revenue.totalRevenue, year2Budget.totals.interest)
+          const year1Workforce = generateWorkforceDataForYear(selectedYear)
+          const year2Workforce = generateWorkforceDataForYear(compareYear)
+          
+          const calcChange = (v1, v2) => v2 !== 0 ? ((v1 - v2) / v2 * 100) : 0
+          
+          return (
+            <div className="space-y-4 sm:space-y-8">
+              {/* Year Selection */}
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 rounded-xl border border-indigo-200 dark:border-indigo-700 p-4 sm:p-6">
+                <h3 className="text-lg font-semibold text-indigo-800 dark:text-indigo-200 mb-4">Compare Fiscal Years</h3>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Year 1:</label>
+                    <span className="px-3 py-1.5 bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200 rounded-lg font-semibold">
+                      FY {selectedYear}
+                    </span>
+                    <span className="text-xs text-indigo-500 dark:text-indigo-400">(change in header)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Year 2:</label>
+                    <select
+                      value={compareYear}
+                      onChange={(e) => setCompareYear(Number(e.target.value))}
+                      className="border rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                    >
+                      {[2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].filter(y => y !== selectedYear).map(y => (
+                        <option key={y} value={y}>FY {y}{y >= YEAR_CONFIG.currentFY ? ' (Proj)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Context Notes */}
+              <div className="bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-700 p-4 sm:p-6">
+                <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">Interpretation Notes</h4>
+                <ul className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                  <li><strong>Color coding:</strong> Green = favorable change, Red = unfavorable (context-dependent)</li>
+                  <li><strong>COVID years (2020-2021):</strong> Extraordinary spending due to relief packages</li>
+                  <li><strong>DOGE (2025):</strong> Workforce reduction program reduced federal employees by ~15%</li>
+                  <li><strong>Projections:</strong> FY2026+ are estimates based on growth models, not actual data</li>
+                </ul>
+              </div>
+
+              {/* Key Metrics Comparison */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Key Metrics Comparison</h3>
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">FY{selectedYear}</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">FY{compareYear}</th>
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Change</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                      <tr className="bg-white dark:bg-gray-800">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Total Spending</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year1Data.totalAgency)}</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year2Data.totalAgency)}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Data.totalAgency, year2Data.totalAgency) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {calcChange(year1Data.totalAgency, year2Data.totalAgency) >= 0 ? '+' : ''}{calcChange(year1Data.totalAgency, year2Data.totalAgency).toFixed(1)}%
+                        </td>
+                      </tr>
+                      <tr className="bg-gray-50 dark:bg-gray-700">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Total Revenue</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year1Revenue.totalRevenue)}</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year2Revenue.totalRevenue)}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Revenue.totalRevenue, year2Revenue.totalRevenue) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {calcChange(year1Revenue.totalRevenue, year2Revenue.totalRevenue) >= 0 ? '+' : ''}{calcChange(year1Revenue.totalRevenue, year2Revenue.totalRevenue).toFixed(1)}%
+                        </td>
+                      </tr>
+                      <tr className="bg-white dark:bg-gray-800">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Budget Deficit</td>
+                        <td className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">-{formatCurrencyStatic(year1Data.totalAgency - year1Revenue.totalRevenue)}</td>
+                        <td className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">-{formatCurrencyStatic(year2Data.totalAgency - year2Revenue.totalRevenue)}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Data.totalAgency - year1Revenue.totalRevenue, year2Data.totalAgency - year2Revenue.totalRevenue) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {calcChange(year1Data.totalAgency - year1Revenue.totalRevenue, year2Data.totalAgency - year2Revenue.totalRevenue) >= 0 ? '+' : ''}{calcChange(year1Data.totalAgency - year1Revenue.totalRevenue, year2Data.totalAgency - year2Revenue.totalRevenue).toFixed(1)}%
+                        </td>
+                      </tr>
+                      <tr className="bg-gray-50 dark:bg-gray-700">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">National Debt</td>
+                        <td className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">{year1Debt.totalDebt_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 text-red-600 text-xs sm:text-sm">{year2Debt.totalDebt_formatted}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Debt.totalDebt, year2Debt.totalDebt) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {calcChange(year1Debt.totalDebt, year2Debt.totalDebt) >= 0 ? '+' : ''}{calcChange(year1Debt.totalDebt, year2Debt.totalDebt).toFixed(1)}%
+                        </td>
+                      </tr>
+                      <tr className="bg-white dark:bg-gray-800">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Debt-to-GDP</td>
+                        <td className="px-3 sm:px-6 py-3 text-amber-600 text-xs sm:text-sm">{year1Debt.debtToGdp.toFixed(1)}%</td>
+                        <td className="px-3 sm:px-6 py-3 text-amber-600 text-xs sm:text-sm">{year2Debt.debtToGdp.toFixed(1)}%</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${year1Debt.debtToGdp >= year2Debt.debtToGdp ? 'text-red-600' : 'text-green-600'}`}>
+                          {year1Debt.debtToGdp >= year2Debt.debtToGdp ? '+' : ''}{(year1Debt.debtToGdp - year2Debt.debtToGdp).toFixed(1)} pts
+                        </td>
+                      </tr>
+                      <tr className="bg-gray-50 dark:bg-gray-700">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Federal Workforce</td>
+                        <td className="px-3 sm:px-6 py-3 text-purple-600 text-xs sm:text-sm">{year1Workforce.totalEmployees_formatted}</td>
+                        <td className="px-3 sm:px-6 py-3 text-purple-600 text-xs sm:text-sm">{year2Workforce.totalEmployees_formatted}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Workforce.totalEmployees, year2Workforce.totalEmployees) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {calcChange(year1Workforce.totalEmployees, year2Workforce.totalEmployees) >= 0 ? '+' : ''}{calcChange(year1Workforce.totalEmployees, year2Workforce.totalEmployees).toFixed(1)}%
+                        </td>
+                      </tr>
+                      <tr className="bg-white dark:bg-gray-800">
+                        <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 dark:text-white text-xs sm:text-sm">Interest Payments</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year1Budget.totals.interest)}</td>
+                        <td className="px-3 sm:px-6 py-3 text-gray-900 dark:text-white text-xs sm:text-sm">{formatCurrencyStatic(year2Budget.totals.interest)}</td>
+                        <td className={`px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium ${calcChange(year1Budget.totals.interest, year2Budget.totals.interest) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {calcChange(year1Budget.totals.interest, year2Budget.totals.interest) >= 0 ? '+' : ''}{calcChange(year1Budget.totals.interest, year2Budget.totals.interest).toFixed(1)}%
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Top Agencies Comparison */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Agencies - FY{selectedYear}</h3>
+                  <AgencyChart agencies={year1Data.agencies.slice(0, 5)} />
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Agencies - FY{compareYear}</h3>
+                  <AgencyChart agencies={year2Data.agencies.slice(0, 5)} />
+                </div>
+              </div>
+
+              {/* Budget Category Comparison */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Budget Composition - FY{selectedYear}</h3>
+                  <CategoryPieChart totals={year1Budget.totals} totalSpending={year1Budget.totalSpending} />
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Budget Composition - FY{compareYear}</h3>
+                  <CategoryPieChart totals={year2Budget.totals} totalSpending={year2Budget.totalSpending} />
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-auto">
+      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6 lg:px-8 space-y-1">
-          <p className="text-xs sm:text-sm text-gray-500 text-center">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
             Data sourced from USAspending.gov | Built for transparency
           </p>
-          <p className="text-[10px] sm:text-xs text-gray-400 text-center">
+          <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 text-center">
             Historical data through FY{YEAR_CONFIG.lastCompleteFY} | FY{YEAR_CONFIG.currentFY}+ are projections based on growth models
           </p>
         </div>
