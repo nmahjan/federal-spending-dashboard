@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "last_updated": "2026-03-15T17:00:00.000Z",
+    "last_updated": "2026-04-01T07:07:13.408576",
     "fiscal_years": [
       2019,
       2020,
@@ -14,41 +14,659 @@
     "sources": [
       "USAspending.gov",
       "Treasury Fiscal Data API"
+    ]
+  },
+  "agencies": {
+    "2019": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "315",
+        "name": "Department of State",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "252",
+        "name": "Department of Justice",
+        "obligated": 0,
+        "outlays": 0.0
+      }
     ],
-    "note": "Initial file - will be updated monthly by GitHub Actions"
+    "2020": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "803",
+        "name": "Small Business Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "614",
+        "name": "General Services Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ],
+    "2021": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "803",
+        "name": "Small Business Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ],
+    "2022": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "315",
+        "name": "Department of State",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ],
+    "2023": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "682",
+        "name": "Federal Deposit Insurance Corporation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ],
+    "2024": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "682",
+        "name": "Federal Deposit Insurance Corporation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ],
+    "2025": [
+      {
+        "code": "806",
+        "name": "Department of Health and Human Services",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "456",
+        "name": "Department of the Treasury",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "539",
+        "name": "Social Security Administration",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1173",
+        "name": "Department of Defense",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "561",
+        "name": "Department of Veterans Affairs",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "95",
+        "name": "Department of Agriculture",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "503",
+        "name": "Office of Personnel Management",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": null,
+        "name": "Unreported Data",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "1068",
+        "name": "Department of Education",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "766",
+        "name": "Department of Homeland Security",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "731",
+        "name": "Department of Transportation",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "930",
+        "name": "Department of Energy",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "882",
+        "name": "Department of Housing and Urban Development",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "183",
+        "name": "Department of Commerce",
+        "obligated": 0,
+        "outlays": 0.0
+      },
+      {
+        "code": "267",
+        "name": "Department of Labor",
+        "obligated": 0,
+        "outlays": 0.0
+      }
+    ]
   },
   "debt": {
-    "2019": {
-      "totalDebt": 22700000000000.0,
-      "publicDebt": 16800000000000.0
-    },
-    "2020": {
-      "totalDebt": 27700000000000.0,
-      "publicDebt": 21000000000000.0
-    },
-    "2021": {
-      "totalDebt": 29600000000000.0,
-      "publicDebt": 22300000000000.0
-    },
-    "2022": {
-      "totalDebt": 31400000000000.0,
-      "publicDebt": 24300000000000.0
-    },
-    "2023": {
-      "totalDebt": 33200000000000.0,
-      "publicDebt": 26200000000000.0
-    },
-    "2024": {
-      "totalDebt": 35000000000000.0,
-      "publicDebt": 27800000000000.0
-    },
-    "2025": {
-      "totalDebt": 36800000000000.0,
-      "publicDebt": 29300000000000.0
-    },
     "2026": {
-      "totalDebt": 38500000000000.0,
-      "publicDebt": 30800000000000.0
+      "totalDebt": 39023028185485.25,
+      "publicDebt": 31385929126772.9,
+      "intragovDebt": 7637099058712.352
     }
   },
   "gdp": {
@@ -60,6 +678,5 @@
     "2024": 28800000000000.0,
     "2025": 30000000000000.0,
     "2026": 31200000000000.0
-  },
-  "agencies": {}
+  }
 }
