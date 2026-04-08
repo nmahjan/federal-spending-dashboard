@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Creates initial spending.json with baseline data"""
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 data = {
     "metadata": {
-        "last_updated": "2026-03-15T17:00:00.000Z",
+        "last_updated": datetime.now(timezone.utc).isoformat(),
         "fiscal_years": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "sources": ["USAspending.gov", "Treasury Fiscal Data API"],
         "note": "Initial file - will be updated monthly by GitHub Actions"
@@ -30,7 +31,7 @@ data = {
 output_path = Path(__file__).parent.parent / "frontend" / "src" / "data" / "spending.json"
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-with open(output_path, "w") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
 
 print(f"Created {output_path}")
