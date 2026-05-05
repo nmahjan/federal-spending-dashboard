@@ -63,6 +63,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add frontend/src/data/spending.json
           git commit -m "chore: Update federal spending data [$(date +'%Y-%m-%d')]"
+          git pull --rebase origin main
           git push
       
       - name: Summary
